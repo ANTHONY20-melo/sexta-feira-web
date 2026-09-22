@@ -1,0 +1,7 @@
+{
+  "name": "sexta-feira-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sexta-Feira News Caster — notícias com imagens em qualquer lugar (Vercel serverless). Fonte: jarvis-site/index.html",
+  "engines": { "node": ">=18" }
+}

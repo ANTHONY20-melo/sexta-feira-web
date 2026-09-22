@@ -1,0 +1,2839 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <meta name="color-scheme" content="dark">
+<title>SEXTA-FEIRA — Assistente de Voz</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%2300d4ff'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23050505'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2300d4ff'/%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   TEMA BASE (sci-fi escuro estilo Homem de Ferro — v6 futurista)
+   ============================================================ */
+:root{
+  --theme:#00b7ff;          /* azul reator (padrão) — sobrescrito por CONFIG */
+  --bg:#02040a;
+  --bg2:#0b1220;
+  --panel:rgba(13,21,38,.55);
+  --panel-solid:#0d1526;
+  --line:rgba(30,41,59,.75);
+  --txt:#e2e8f0;
+  --dim:#64748b;
+  --violet:#8b5cf6;
+  --glass-brd:rgba(0,183,255,.22);
+  --orb-color:var(--theme);  /* cor dinâmica do orbe/estado — muda ao falar/ouvir/pensar */
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  background:
+    radial-gradient(900px 420px at 12% -8%, color-mix(in srgb, var(--violet) 14%, transparent), transparent 60%),
+    radial-gradient(1100px 520px at 88% -12%, color-mix(in srgb, var(--theme) 16%, transparent), transparent 60%),
+    radial-gradient(700px 420px at 50% 115%, color-mix(in srgb, var(--theme) 8%, transparent), transparent 70%),
+    var(--bg);
+  color:var(--txt);
+  font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  overflow-x:hidden;
+  position:relative;
+}
+/* grade de circuito (fundo técnico sutil) */
+body::before{
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,183,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,183,255,.045) 1px, transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(circle at 50% 30%, #000 10%, transparent 75%);
+  -webkit-mask-image:radial-gradient(circle at 50% 30%, #000 10%, transparent 75%);
+}
+.mono{ font-family:ui-monospace,'Cascadia Mono',Consolas,'Courier New',monospace; }
+
+/* ============================================================
+   TELAS DE FUNDO (boot + ativação)
+   ============================================================ */
+.screen{
+  position:fixed; inset:0; z-index:60;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:radial-gradient(900px 500px at 50% 30%, rgba(139,92,246,.08), transparent 60%), var(--bg);
+  transition:opacity .55s ease;
+}
+.screen.hide{ opacity:0; pointer-events:none; }
+#activation{ display:none; }
+
+.brand-big{
+  font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;
+  font-size:clamp(2.4rem,10vw,5.5rem);
+  font-weight:800;
+  letter-spacing:.1em;
+  background:linear-gradient(90deg,var(--theme),var(--violet));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 24px color-mix(in srgb, var(--theme) 45%, transparent));
+}
+.boot-hr{
+  width:min(80vw,560px); height:2px; margin:20px 0;
+  background:linear-gradient(90deg,transparent,var(--theme) 30%,var(--violet) 70%,transparent);
+  border:none;
+}
+.boot-sync{
+  font-family:ui-monospace,Consolas,monospace;
+  font-size:.85rem; letter-spacing:.35em; color:var(--theme);
+  animation:blink 1.1s steps(2) infinite;
+}
+.boot-ver{ margin-top:16px; font-size:.75rem; letter-spacing:.3em; color:#475569; }
+@keyframes blink{ 50%{ opacity:0; } }
+
+#btn-activate{
+  margin-top:34px;
+  padding:16px 42px;
+  font-family:ui-monospace,Consolas,monospace;
+  font-size:1.05rem; font-weight:700; letter-spacing:.22em;
+  color:#fff;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--theme) 80%,#fff),var(--theme) 40%,var(--violet));
+  border:none; border-radius:12px; cursor:pointer;
+  box-shadow:0 0 26px color-mix(in srgb,var(--theme) 55%,transparent);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+#btn-activate:hover{ transform:translateY(-2px) scale(1.03); box-shadow:0 0 42px color-mix(in srgb,var(--theme) 75%,transparent); }
+#btn-activate:active{ transform:scale(.97); }
+.act-hint{ margin-top:14px; font-size:.7rem; letter-spacing:.3em; color:var(--dim); }
+
+/* ============================================================
+   APP
+   ============================================================ */
+#app{ display:none; flex-direction:column; min-height:100vh; }
+#app.visible{ display:flex; }
+
+header{
+  position:sticky; top:0; z-index:40;
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  padding:10px 18px;
+  background:color-mix(in srgb,var(--bg) 70%,transparent);
+  backdrop-filter:blur(14px) saturate(1.4);
+  -webkit-backdrop-filter:blur(14px) saturate(1.4);
+  border-bottom:1px solid color-mix(in srgb,var(--theme) 18%,transparent);
+  box-shadow:0 8px 30px rgba(0,0,0,.35), 0 0 40px color-mix(in srgb,var(--theme) 7%,transparent);
+}
+header::after{
+  content:''; position:absolute; left:18px; right:18px; bottom:-1px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--theme) 30%,var(--violet) 70%,transparent);
+  opacity:.5;
+}
+.brand{
+  font-family:ui-monospace,Consolas,monospace;
+  font-weight:800; font-size:1.15rem; letter-spacing:.18em;
+  background:linear-gradient(90deg,var(--theme),var(--violet));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.key-row{ margin-left:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.key-row input{
+  width:min(46vw,320px); padding:8px 12px;
+  font-family:ui-monospace,Consolas,monospace; font-size:.72rem; letter-spacing:.06em;
+  color:var(--txt); background:var(--panel);
+  border:1px solid var(--line); border-radius:8px; outline:none;
+}
+.key-row input:focus{ border-color:var(--theme); box-shadow:0 0 0 3px color-mix(in srgb,var(--theme) 20%,transparent); }
+.key-row.flash input{ border-color:#f87171; box-shadow:0 0 0 3px rgba(248,113,113,.25); animation:shake .3s ease 2; }
+@keyframes shake{ 25%{ transform:translateX(-4px);} 75%{ transform:translateX(4px);} }
+.btn-mini{
+  padding:8px 14px; border:1px solid var(--line); border-radius:8px;
+  background:var(--panel); color:var(--txt); cursor:pointer;
+  font-family:ui-monospace,Consolas,monospace; font-size:.72rem; letter-spacing:.1em;
+  transition:border-color .15s, color .15s;
+}
+.btn-mini:hover{ border-color:var(--theme); color:var(--theme); }
+.provider-select{
+  padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+  background:var(--panel); color:var(--txt); cursor:pointer;
+  font-family:ui-monospace,Consolas,monospace; font-size:.72rem; letter-spacing:.06em; outline:none;
+}
+.provider-select:focus{ border-color:var(--theme); box-shadow:0 0 0 3px color-mix(in srgb,var(--theme) 18%,transparent); }
+
+/* banner de acesso mobile (modo --rede: mostra o endereço para abrir no celular) */
+.rede-info{
+  display:none; max-width:560px; margin:0 auto 2px; padding:8px 14px;
+  border:1px solid color-mix(in srgb,var(--theme) 35%,transparent);
+  background:rgba(0,183,255,.08); border-radius:10px;
+  color:var(--txt); font-size:.78rem; letter-spacing:.03em; text-align:center;
+}
+.rede-info.show{ display:block; }
+.rede-info a{ color:var(--theme); font-weight:600; text-decoration:none; }
+.rede-info .r-close{ margin-left:8px; cursor:pointer; opacity:.7; border:none; background:none; color:inherit; font-size:.9rem; }
+.rede-info .r-close:hover{ opacity:1; }
+
+main{
+  flex:1; width:100%; max-width:1080px; margin:0 auto;
+  padding:26px 18px 10px;
+  display:flex; flex-direction:column; align-items:center;
+}
+
+/* --- orbe reator (v6) --- */
+.orb-wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; position:relative; z-index:2; }
+.orb{
+  position:relative; width:132px; height:132px; border-radius:50%;
+  cursor:pointer;
+  background:radial-gradient(circle at 34% 30%, rgba(255,255,255,.95), var(--orb-color) 42%, color-mix(in srgb,var(--orb-color) 30%,#000) 75%, #000 130%);
+  box-shadow:0 0 42px color-mix(in srgb,var(--orb-color) 60%,transparent), inset 0 0 26px rgba(255,255,255,.22);
+}
+.orb::after{
+  content:''; position:absolute; inset:-7px; border-radius:50%;
+  border:2px solid color-mix(in srgb,var(--orb-color) 65%,transparent);
+}
+.orb::before{
+  content:''; position:absolute; inset:-2px; border-radius:50%;
+  box-shadow:0 0 18px 4px color-mix(in srgb,var(--orb-color) 55%,transparent);
+  animation:coreGlow 2.6s ease-in-out infinite;
+}
+@keyframes coreGlow{
+  0%,100%{ box-shadow:0 0 14px 3px color-mix(in srgb,var(--orb-color) 45%,transparent); }
+  50%{ box-shadow:0 0 26px 7px color-mix(in srgb,var(--orb-color) 70%,transparent); }
+}
+/* halo externo vivo — visível mesmo parado */
+.orb-wrap::before{
+  content:''; position:absolute; top:50%; left:50%; width:220px; height:220px;
+  transform:translate(-50%,-64%);
+  border-radius:50%;
+  background:radial-gradient(circle, color-mix(in srgb,var(--orb-color) 22%,transparent), transparent 65%);
+  animation:haloBreathe 3.4s ease-in-out infinite;
+}
+@keyframes haloBreathe{
+  0%,100%{ opacity:.55; transform:translate(-50%,-64%) scale(1); }
+  50%{ opacity:1; transform:translate(-50%,-64%) scale(1.08); }
+}
+.orb .orb-core{
+  position:absolute; inset:34%; border-radius:50%;
+  background:radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,.15));
+}
+.orb .orb-ring{
+  position:absolute; inset:-18px; border-radius:50%;
+  border:1px dashed color-mix(in srgb,var(--orb-color) 40%,transparent);
+  animation:spin 14s linear infinite;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.orb.state-idle{ animation:orbPulse 3.2s ease-in-out infinite; }
+.orb.state-thinking{ animation:orbPulse .45s ease-in-out infinite; }
+.orb.state-listening::before, .orb.state-speaking::before,
+.orb.state-listening::after,  .orb.state-speaking::after{
+  content:''; position:absolute; inset:-14px; border-radius:50%;
+  border:2px solid var(--theme); opacity:0;
+}
+.orb.state-listening::before{ animation:wave 1.5s ease-out infinite; }
+.orb.state-listening::after{ animation:wave 1.5s ease-out .75s infinite; }
+.orb.state-speaking::before{ animation:wave 2.4s ease-out infinite; }
+.orb.state-speaking::after{ animation:wave 2.4s ease-out 1.2s infinite; }
+@keyframes wave{
+  0%{ transform:scale(.92); opacity:.75; }
+  100%{ transform:scale(1.65); opacity:0; }
+}
+@keyframes orbPulse{
+  0%,100%{ box-shadow:0 0 30px color-mix(in srgb,var(--orb-color) 45%,transparent), inset 0 0 22px rgba(255,255,255,.2); }
+  50%{ box-shadow:0 0 60px color-mix(in srgb,var(--orb-color) 80%,transparent), inset 0 0 30px rgba(255,255,255,.35); }
+}
+.orb-name{ font-family:ui-monospace,Consolas,monospace; font-weight:800; letter-spacing:.35em; font-size:1.05rem; color:var(--orb-color); text-shadow:0 0 14px color-mix(in srgb,var(--orb-color) 60%,transparent); }
+
+/* cor do orbe por estado: ouvindo=verde, pensando=violeta, falando=âmbar */
+.orb.state-idle{ --orb-color:var(--theme); }
+.orb.state-listening{ --orb-color:#34d399; }
+.orb.state-thinking{ --orb-color:#a78bfa; }
+.orb.state-speaking{ --orb-color:#fbbf24; }
+
+/* --- transcrição (balões glass estilo chat com avatar) --- */
+.transcript{ width:100%; max-width:760px; margin-top:22px; display:flex; flex-direction:column; gap:10px; position:relative; z-index:2; }
+.line{
+  display:flex; gap:12px; align-items:flex-end;
+  padding:9px 14px; border-radius:16px;
+  background:var(--panel);
+  border:1px solid var(--glass-brd);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  box-shadow:0 6px 24px rgba(0,0,0,.28);
+  max-width:86%;
+}
+/* avatar circular com a inicial */
+.line::before{
+  content:attr(data-avatar); flex:none;
+  width:34px; height:34px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:ui-monospace,Consolas,monospace; font-weight:800; font-size:.8rem;
+}
+.line .who{
+  flex:none;
+  font-family:ui-monospace,Consolas,monospace; font-size:.6rem; font-weight:700;
+  letter-spacing:.13em; padding:3px 8px; border-radius:999px;
+}
+.line p{ font-size:.95rem; line-height:1.5; word-break:break-word; }
+.line.empty{ display:none; }
+/* usuário — balão à direita, azul */
+.line.user{
+  align-self:flex-end; flex-direction:row-reverse; text-align:right;
+  border-color:rgba(96,165,250,.35);
+  background:linear-gradient(135deg,rgba(96,165,250,.15),rgba(96,165,250,.05));
+  border-bottom-right-radius:4px;
+}
+.line.user::before{
+  content:"V";
+  background:radial-gradient(circle at 30% 25%,#93c5fd,#3b82f6 60%,#1d4ed8);
+  color:#fff; box-shadow:0 0 14px rgba(59,130,246,.55);
+}
+.line.user .who{ color:#bfdbfe; background:rgba(96,165,250,.14); border:1px solid rgba(96,165,250,.35); }
+/* Sexta-Feira — balão à esquerda, tema */
+.line.jarvis{
+  align-self:flex-start;
+  border-color:color-mix(in srgb,var(--theme) 30%,transparent);
+  border-bottom-left-radius:4px;
+}
+.line.jarvis::before{
+  content:"SF";
+  background:radial-gradient(circle at 30% 25%,#ffffff55,var(--theme) 60%,color-mix(in srgb,var(--theme) 70%,#000));
+  color:#fff; box-shadow:0 0 14px color-mix(in srgb,var(--theme) 55%,transparent);
+}
+.line.jarvis .who{ color:var(--theme); background:color-mix(in srgb,var(--theme) 14%,transparent); border:1px solid color-mix(in srgb,var(--theme) 40%,transparent); }
+.line.jarvis p{ font-family:ui-monospace,Consolas,monospace; font-size:.9rem; color:#c7d2fe; }
+/* --- status: chip de vidro com LED + equalizador ao vivo --- */
+#status{
+  display:inline-flex; align-items:center; gap:10px;
+  margin-top:16px; padding:8px 18px; border-radius:999px;
+  font-family:ui-monospace,Consolas,monospace; font-size:.66rem; letter-spacing:.26em;
+  color:var(--orb-color);
+  background:color-mix(in srgb,var(--panel) 78%,transparent);
+  border:1px solid color-mix(in srgb,var(--orb-color) 38%,transparent);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  box-shadow:0 0 18px color-mix(in srgb,var(--orb-color) 22%,transparent), inset 0 0 12px rgba(255,255,255,.04);
+  text-shadow:0 0 8px color-mix(in srgb,var(--orb-color) 60%,transparent);
+  position:relative; z-index:2;
+  transition:color .4s ease,border-color .4s ease,box-shadow .4s ease;
+}
+#status .led{
+  width:8px; height:8px; border-radius:50%; flex:none;
+  background:var(--orb-color);
+  box-shadow:0 0 10px 2px color-mix(in srgb,var(--orb-color) 65%,transparent);
+  animation:ledPulse 1.6s ease-in-out infinite;
+}
+@keyframes ledPulse{ 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(.65); opacity:.5; } }
+#status .eq{ display:inline-flex; align-items:flex-end; gap:3px; height:13px; }
+#status .eq i{ width:3px; height:100%; border-radius:2px; background:var(--orb-color); animation:eqWave .8s ease-in-out infinite; }
+#status .eq i:nth-child(1){ animation-delay:.05s; }
+#status .eq i:nth-child(2){ animation-delay:.22s; }
+#status .eq i:nth-child(3){ animation-delay:.4s; }
+#status .eq i:nth-child(4){ animation-delay:.58s; }
+#status .eq i:nth-child(5){ animation-delay:.3s; }
+#status.state-idle .eq i{ animation-play-state:paused; transform:scaleY(.3); opacity:.5; }
+@keyframes eqWave{
+  0%,100%{ transform:scaleY(.25); }
+  50%{ transform:scaleY(1); }
+}
+
+/* --- entrada --- */
+.input-row{ width:100%; max-width:760px; margin-top:16px; display:flex; gap:10px; }
+.input-row input{
+  flex:1; padding:14px 16px; border-radius:12px;
+  background:var(--panel); border:1px solid var(--line); color:var(--txt);
+  font-size:.95rem; outline:none;
+}
+.input-row input:focus{ border-color:var(--theme); box-shadow:0 0 0 3px color-mix(in srgb,var(--theme) 18%,transparent); }
+.input-row input::placeholder{ color:var(--dim); }
+.ctrl-btn{
+  flex:none; width:52px; border-radius:12px; border:1px solid var(--line);
+  background:var(--panel); color:var(--txt); font-size:1.25rem; cursor:pointer;
+  transition:border-color .15s, transform .1s;
+}
+.ctrl-btn:hover{ border-color:var(--theme); }
+.ctrl-btn:active{ transform:scale(.94); }
+
+/* ============================================================
+   SECOND BRAIN
+   ============================================================ */
+#brain{ width:100%; max-width:1080px; margin:34px auto 20px; padding:0 18px; position:relative; z-index:2; display:none; }
+#brain.open{ display:block; }
+/* botão do Second Brain no header */
+#btn-brain{
+  border:1px solid color-mix(in srgb,var(--orb-color) 45%,transparent);
+  background:color-mix(in srgb,var(--orb-color) 10%,transparent);
+  color:var(--orb-color); border-radius:9px; padding:7px 10px; cursor:pointer;
+  font-size:.92rem; line-height:1; transition:all .2s;
+}
+#btn-brain:hover{ box-shadow:0 0 14px color-mix(in srgb,var(--orb-color) 40%,transparent); }
+#btn-brain.active{ background:color-mix(in srgb,var(--orb-color) 22%,transparent); box-shadow:0 0 16px color-mix(in srgb,var(--orb-color) 50%,transparent); }
+
+#btn-dinamico{
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.14);
+  color:#9fd8ff;
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.07em;
+  cursor:pointer;
+  transition:all .18s ease;
+  white-space:nowrap;
+}
+#btn-dinamico:hover{ background:rgba(139,214,255,.14); box-shadow:0 0 12px rgba(139,214,255,.35); }
+#btn-dinamico.active{
+  background:linear-gradient(135deg,#7c3aed,#00b7ff);
+  color:#fff;
+  border-color:transparent;
+  box-shadow:0 0 18px rgba(124,58,237,.55);
+  animation:dinPulse 2.2s ease-in-out infinite;
+}
+@keyframes dinPulse{
+  0%,100%{ box-shadow:0 0 10px rgba(124,58,237,.4); }
+  50%{ box-shadow:0 0 24px rgba(0,183,255,.65); }
+}
+.brain-panel{
+  background:var(--panel); border:1px solid var(--glass-brd); border-radius:16px; overflow:hidden;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  box-shadow:0 10px 40px rgba(0,0,0,.35);
+}
+.brain-bar{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:12px 16px; border-bottom:1px solid var(--line);
+}
+.brain-title{ font-family:ui-monospace,Consolas,monospace; font-weight:700; letter-spacing:.08em; font-size:.95rem; }
+.brain-sub{ font-size:.72rem; color:var(--dim); }
+.brain-count{ margin-left:auto; font-family:ui-monospace,Consolas,monospace; font-size:.72rem; color:var(--theme); letter-spacing:.1em; }
+.graph-wrap{ width:100%; overflow-x:auto; }
+.graph-svg{ width:100%; min-width:520px; height:auto; display:block; }
+#legend{
+  display:flex; align-items:center; flex-wrap:wrap; gap:10px 18px;
+  padding:12px 16px; border-top:1px solid var(--line);
+  font-size:.72rem; color:var(--dim);
+}
+#legend .lg-item{ display:inline-flex; align-items:center; gap:6px; font-family:ui-monospace,Consolas,monospace; }
+#legend .lg-item i{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+#legend .lg-injected{ margin-left:auto; color:#34d399; font-family:ui-monospace,Consolas,monospace; letter-spacing:.04em; }
+.nlabel{ font-family:ui-monospace,Consolas,monospace; font-size:15px; fill:#cbd5e1; paint-order:stroke; stroke:#030712; stroke-width:3px; }
+.core-emoji{ font-size:34px; }
+.pulse{ transition:none; }
+
+/* arestas vivas: traços deslizando (dasharray + dashoffset) */
+.edge{ stroke-dasharray:5 13; animation:dashflow 2.4s linear infinite; }
+@keyframes dashflow{ to{ stroke-dashoffset:-36; } }
+
+/* nó pisca quando a memória viva cria/atualiza uma nota */
+.nbody.blink{ animation:nodeblink .55s ease 3; }
+@keyframes nodeblink{
+  0%,100%{ fill-opacity:.16; stroke-opacity:1; }
+  50%{ fill-opacity:.85; stroke-opacity:.3; }
+}
+
+/* ============================================================
+   EDITOR DE NOTA (modal)
+   ============================================================ */
+#modal{ display:none; position:fixed; inset:0; z-index:90; align-items:center; justify-content:center; background:rgba(2,4,10,.7); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+#modal.open{ display:flex; }
+.modal-box{
+  width:min(92vw,480px);
+  background:linear-gradient(160deg, rgba(13,21,38,.92), rgba(11,18,32,.92));
+  border:1px solid var(--glass-brd); border-radius:16px;
+  padding:22px; box-shadow:0 24px 70px rgba(0,0,0,.65);
+}
+.modal-box h3{ font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; font-size:1rem; margin-bottom:16px; color:var(--theme); }
+.modal-box label{ display:block; font-size:.7rem; letter-spacing:.14em; color:var(--dim); margin:12px 0 6px; font-family:ui-monospace,Consolas,monospace; }
+.modal-box input, .modal-box textarea, .modal-box select{
+  width:100%; padding:11px 13px; border-radius:10px;
+  background:var(--panel); border:1px solid var(--line); color:var(--txt);
+  font-size:.92rem; outline:none; font-family:inherit;
+}
+.modal-box input:focus,.modal-box textarea:focus,.modal-box select:focus{ border-color:var(--theme); }
+.modal-box textarea{ min-height:110px; resize:vertical; }
+.modal-actions{ display:flex; gap:10px; margin-top:18px; }
+.modal-actions .btn-mini{ flex:1; text-align:center; padding:12px; }
+.btn-danger{ border-color:rgba(248,113,113,.4); color:#f87171; }
+.btn-danger:hover{ border-color:#f87171; color:#f87171; }
+.btn-save{ border-color:var(--theme); color:var(--theme); }
+.btn-save:hover{ background:color-mix(in srgb,var(--theme) 14%,transparent); }
+
+/* ============================================================
+   PLAYER EMBUTIDO (dock de música — YouTube/Spotify)
+   ============================================================ */
+#music-dock{
+  position:fixed; right:22px; bottom:22px; z-index:70; width:min(430px, 92vw);
+  background:linear-gradient(165deg, rgba(15,23,42,.94), rgba(4,8,16,.96));
+  border:1px solid var(--glass-brd); border-radius:16px; overflow:hidden;
+  box-shadow:0 18px 50px rgba(0,0,0,.6), 0 0 24px color-mix(in srgb,var(--theme) 14%,transparent);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  display:none; flex-direction:column; font-family:ui-monospace,Consolas,monospace;
+}
+/* quando o usuário arrastou, posição inline vence o canto */
+#music-dock.dragged{ right:auto !important; bottom:auto !important; }
+#music-dock.open{ display:flex; animation:dockIn .3s ease; }
+@keyframes dockIn{ from{ transform:translateY(24px); opacity:0; } to{ transform:none; opacity:1; } }
+.music-head{
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  border-bottom:1px solid var(--glass-brd);
+  cursor:grab; user-select:none; -webkit-user-select:none;
+  touch-action:none;
+}
+.music-head:active{ cursor:grabbing; }
+.music-head .m-title{
+  font-size:.78rem; font-weight:800; letter-spacing:.18em; color:var(--theme);
+  text-shadow:0 0 10px color-mix(in srgb,var(--theme) 50%,transparent);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;
+}
+.music-tabs{ display:flex; gap:6px; }
+.music-tab{
+  padding:5px 12px; border:1px solid var(--line); border-radius:8px;
+  background:transparent; color:var(--dim); cursor:pointer;
+  font-family:inherit; font-size:.7rem; letter-spacing:.12em;
+  transition:all .15s;
+}
+.music-tab:hover{ color:var(--theme); border-color:var(--theme); }
+.music-tab.active{ color:var(--theme); border-color:var(--theme); background:color-mix(in srgb,var(--theme) 12%,transparent); }
+.music-body{ padding:12px; }
+.music-search{ display:flex; gap:8px; margin-bottom:10px; }
+.music-search input{
+  flex:1; padding:9px 12px; border-radius:9px;
+  background:rgba(2,4,10,.7); border:1px solid var(--line); color:var(--txt);
+  font-family:inherit; font-size:.82rem; outline:none;
+}
+.music-search input:focus{ border-color:var(--theme); box-shadow:0 0 0 3px color-mix(in srgb,var(--theme) 16%,transparent); }
+.music-go{
+  padding:9px 14px; border-radius:9px; border:1px solid var(--theme); cursor:pointer;
+  background:linear-gradient(135deg, color-mix(in srgb,var(--theme) 70%,#fff), var(--theme) 60%);
+  color:#fff; font-family:inherit; font-weight:700; letter-spacing:.1em; font-size:.72rem;
+}
+.music-frame{ position:relative; width:100%; height:236px; border-radius:10px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,.06); }
+.music-frame iframe{ width:100%; height:100%; border:0; }
+.music-foot{ padding:8px 14px; border-top:1px solid var(--glass-brd); display:flex; align-items:center; gap:8px; }
+.music-foot .m-note{ flex:1; font-size:.62rem; letter-spacing:.08em; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.music-foot .m-link{
+  font-size:.62rem; letter-spacing:.1em; color:var(--theme); text-decoration:none;
+  border:1px solid var(--glass-brd); padding:4px 10px; border-radius:7px;
+}
+.music-foot .m-link:hover{ background:color-mix(in srgb,var(--theme) 12%,transparent); }
+.music-close{
+  width:26px; height:26px; border-radius:8px; border:1px solid var(--line); cursor:pointer;
+  background:transparent; color:var(--dim); font-size:.9rem; line-height:1;
+}
+.music-close:hover{ color:#f87171; border-color:#f87171; }
+/* alça de arrastar no cabeçalho (pra mostrar que move) */
+.music-grip{
+  font-size:.75rem; color:var(--dim); letter-spacing:0;
+  padding:3px 6px; border:1px dashed var(--line); border-radius:6px;
+}
+.music-grip:hover{ color:var(--theme); border-color:var(--theme); }
+
+/* ============================================================
+   JANELA DE NOTÍCIAS (dock — mesmo padrão do player, lista clicável)
+   ============================================================ */
+#news-dock{
+  position:fixed; right:22px; bottom:22px; z-index:70; width:min(430px, 92vw);
+  background:linear-gradient(165deg, rgba(15,23,42,.94), rgba(4,8,16,.96));
+  border:1px solid var(--glass-brd); border-radius:16px; overflow:hidden;
+  box-shadow:0 18px 50px rgba(0,0,0,.6), 0 0 24px color-mix(in srgb,var(--theme) 14%,transparent);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  display:none; flex-direction:column; font-family:ui-monospace,Consolas,monospace;
+}
+#news-dock.dragged{ right:auto !important; bottom:auto !important; }
+#news-dock.open{ display:flex; animation:dockIn .3s ease; }
+.news-head{
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  border-bottom:1px solid var(--glass-brd);
+  cursor:grab; user-select:none; -webkit-user-select:none;
+  touch-action:none;
+}
+.news-head:active{ cursor:grabbing; }
+.news-head .m-title{
+  font-size:.78rem; font-weight:800; letter-spacing:.18em; color:var(--theme);
+  text-shadow:0 0 10px color-mix(in srgb,var(--theme) 50%,transparent);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;
+}
+.news-body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
+.news-search{ display:flex; gap:8px; }
+.news-search input{
+  flex:1; padding:9px 12px; border-radius:9px;
+  background:rgba(2,4,10,.7); border:1px solid var(--line); color:var(--txt);
+  font-family:inherit; font-size:.82rem; outline:none;
+}
+.news-search input:focus{ border-color:var(--theme); box-shadow:0 0 0 3px color-mix(in srgb,var(--theme) 16%,transparent); }
+.news-go{
+  padding:9px 14px; border-radius:9px; border:1px solid var(--theme); cursor:pointer;
+  background:linear-gradient(135deg, color-mix(in srgb,var(--theme) 70%,#fff), var(--theme) 60%);
+  color:#fff; font-family:inherit; font-weight:700; letter-spacing:.1em; font-size:.72rem;
+}
+.news-list{
+  display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;
+  padding:2px 2px 6px;
+}
+.news-item{
+  display:flex; flex-direction:row; align-items:center; gap:10px; padding:8px 12px;
+  border:1px solid var(--line); border-radius:10px; text-decoration:none;
+  background:rgba(2,4,10,.5); transition:all .15s;
+  overflow:hidden;
+}
+.news-item:hover{ border-color:var(--theme); background:color-mix(in srgb,var(--theme) 10%,transparent); }
+/* thumb noticia: tamanho FIXO + object-fit:cover + clip (sem distorcao nem estiramento) */
+.news-item .n-thumb{
+  flex:0 0 84px; width:84px; height:58px; border-radius:7px; overflow:hidden;
+  border:1px solid var(--line); background:color-mix(in srgb,var(--theme) 8%,transparent);
+}
+.news-item .n-thumb img{
+  display:block; width:100%; height:100%; object-fit:cover; object-position:center;
+}
+.news-item .n-corpo{
+  flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;
+}
+.news-item .n-title{
+  font-size:.78rem; line-height:1.35; color:var(--txt); letter-spacing:.01em;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.news-item:hover .n-title{ color:#fff; }
+.news-item .n-data{
+  font-size:.58rem; letter-spacing:.12em; color:var(--dim); margin-top:2px;
+}
+.news-empty{
+  padding:26px 12px; text-align:center;   font-size:.66rem; letter-spacing:.12em; color:var(--dim);
+}
+/* ═══ NEWS CASTER ═══ chips de atalho */
+.news-chips{
+  display:flex; gap:6px; flex-wrap:wrap;
+}
+.news-chips .n-chip{
+  font-family:inherit; font-size:.58rem; letter-spacing:.14em; color:var(--dim);
+  padding:5px 12px; border:1px solid var(--line); border-radius:999px; background:transparent;
+  cursor:pointer; transition:all .15s;
+}
+.news-chips .n-chip:hover,.news-chips .n-chip.on{
+  color:#fff; border-color:var(--theme); background:color-mix(in srgb,var(--theme) 14%,transparent);
+}
+/* ═══ NEWS CASTER ═══ hero / destaque (1a noticia grande) */
+.news-hero{
+  display:block; overflow:hidden; border:1px solid var(--line); border-radius:12px;
+  background:rgba(2,4,10,.55); text-decoration:none; transition:border-color .15s;
+}
+.news-hero:hover{ border-color:var(--theme); }
+.news-hero .nh-img-box{
+  position:relative; width:100%; overflow:hidden;
+}
+.news-hero .nh-img-box img{
+  display:block; width:100%; aspect-ratio:16/9; object-fit:cover; object-position:center;
+}
+.news-hero .nh-grad{
+  position:absolute; inset:0; background:linear-gradient(to top,rgba(2,4,10,.9) 8%,transparent 70%);
+}
+.news-hero .nh-corpo{
+  position:absolute; left:0; right:0; bottom:0; padding:12px 14px; display:flex; flex-direction:column; gap:2px;
+}
+.news-hero .nh-src{
+  font-size:.52rem; letter-spacing:.16em; color:var(--theme); font-weight:700;
+}
+.news-hero .nh-titulo{
+  font-size:.9rem; line-height:1.3; color:#fff; letter-spacing:.01em; text-shadow:0 1px 8px rgba(0,0,0,.7);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+/* ── ticker de manchetes (NOTICIAS DO MUNDO): rolando no rodape ── */
+.news-ticker{
+  display:flex; align-items:center; gap:4px; min-width:0; overflow:hidden;
+}
+.news-ticker .tk-label{
+  flex:0 0 auto; font-size:.58rem; font-weight:700; letter-spacing:.14em; color:var(--theme);
+}
+.news-ticker .tk-track{
+  flex:1 1 auto; min-width:0; overflow:hidden; position:relative;
+}
+.news-ticker .tk-inner{
+  display:inline-flex; white-space:nowrap; animation:tkRola 20s linear infinite;
+}
+.news-ticker:hover .tk-inner{ animation-play-state:paused; }
+@keyframes tkRola{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+.news-ticker .tk-item{
+  font-size:.56rem; letter-spacing:.1em; color:var(--dim); white-space:nowrap; margin-right:26px;
+}
+.news-ticker .tk-item b{ color:#fff; font-weight:600; }
+.news-ticker .tk-item::before{ content:'◆ '; color:var(--theme); font-size:.5rem; margin-right:6px; }
+/* ═══ UPGRADE NEWS CASTER: chips + hero + ticker ═══ */
+.news-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+.news-chips button{
+  font-family:inherit; font-size:.56rem; letter-spacing:.14em; color:var(--dim); cursor:pointer;
+  padding:6px 11px; border:1px solid var(--line); border-radius:99px; background:transparent; transition:all .15s;
+}
+.news-chips button:hover, .news-chips button.on{
+  color:#fff; border-color:var(--theme); background:color-mix(in srgb,var(--theme) 16%,transparent);
+}
+.news-hero{ position:relative; border-radius:11px; overflow:hidden; text-decoration:none; display:block; }
+.news-hero img{
+  display:block; width:100%; aspect-ratio:16/9; object-fit:cover; object-position:center;
+}
+.news-hero .nh-sombra{
+  position:absolute; inset:0; background:linear-gradient(to top, rgba(2,4,10,.92) 12%, rgba(2,4,10,.25) 55%, rgba(2,4,10,.05));
+}
+.news-hero .nh-titulo{
+  position:absolute; left:0; right:0; bottom:0; padding:14px 12px 11px;
+  font-size:.86rem; line-height:1.35; font-weight:700; color:#fff; letter-spacing:.01em;
+  text-shadow:0 2px 10px rgba(0,0,0,.75);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.news-hero .nh-fonte{
+  position:absolute; top:9px; left:9px; padding:4px 9px; border-radius:6px;
+  background:color-mix(in srgb,var(--theme) 85%,#000); color:#fff;
+  font-size:.52rem; letter-spacing:.16em; font-weight:700;
+}
+.news-ticker{
+  border-top:1px solid var(--line); padding:5px 10px; overflow:hidden; white-space:nowrap;
+  position:relative;
+}
+.news-ticker .tk-track{
+  display:inline-block; padding-left:100%; animation:tkScroll 42s linear infinite;
+}
+.news-ticker:hover .tk-track{ animation-play-state:paused; }
+@keyframes tkScroll{ from{ transform:translateX(0); } to{ transform:translateX(-100%); } }
+.news-ticker .tk-item{ font-size:.56rem; letter-spacing:.13em; color:var(--dim); }
+.news-ticker .tk-item b{ color:#fff; font-weight:600; }
+/* ═══ NEWS CASTER upgrade: chips de atalho + hero + ticker ═══ */
+.news-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+.news-chips button{
+  padding:5px 10px; border:1px solid var(--line); border-radius:99px; background:transparent;
+  color:var(--dim); font-family:inherit; font-size:.58rem; letter-spacing:.14em; cursor:pointer;
+  transition:all .15s;
+}
+.news-chips button:hover{ border-color:var(--theme); color:#fff; background:color-mix(in srgb,var(--theme) 12%,transparent); }
+.news-chips button.active{ border-color:var(--theme); color:#fff; background:color-mix(in srgb,var(--theme) 22%,transparent); }
+/* hero: primeira noticia em destaque (imagem grande, titulo grande) */
+.news-hero{
+  display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid var(--line);
+  border-radius:12px; text-decoration:none; background:rgba(2,4,10,.55); overflow:hidden;
+}
+.news-hero:hover{ border-color:var(--theme); }
+.news-hero .nh-thumb{ width:100%; aspect-ratio:16/9; border-radius:9px; overflow:hidden; border:1px solid var(--line); }
+.news-hero .nh-thumb img{ width:100%; height:100%; object-fit:cover; object-position:center; display:block; }
+.news-hero .nh-title{
+  font-size:.85rem; line-height:1.35; color:#fff; letter-spacing:.01em;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.news-hero .nh-data{ font-size:.6rem; letter-spacing:.12em; color:var(--dim); }
+/* ticker de manchetes rolando (marquee infinito sem JS) */
+.news-ticker{
+  overflow:hidden; position:relative; height:20px; display:flex; align-items:center;
+  border-top:1px solid var(--line); background:rgba(2,4,10,.4);
+  --tk: color-mix(in srgb,var(--theme) 14%,transparent);
+}
+.news-ticker .tk-track{
+  display:inline-flex; gap:0; will-change:transform; animation:tkScroll 28s linear infinite; white-space:nowrap;
+}
+.news-ticker:hover .tk-track{ animation-play-state:paused; }
+.news-ticker .tk-sep{ color:var(--theme); padding:0 14px; font-size:.5rem; }
+.news-ticker .tk-item{
+  font-size:.58rem; letter-spacing:.09em; color:var(--dim); padding-right:12px; white-space:nowrap;
+}
+@keyframes tkScroll{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+.news-foot .m-note{ max-width:55%; }
+.news-loading{ display:flex; gap:6px; align-items:center; justify-content:center; padding:22px 0; }
+.news-loading i{ width:7px; height:7px; border-radius:50%; background:var(--theme); animation:pulseDot 1s ease infinite; }
+.news-loading i:nth-child(2){ animation-delay:.15s; }
+.news-loading i:nth-child(3){ animation-delay:.3s; }
+@keyframes pulseDot{ 0%,100%{ opacity:.25; transform:scale(.8); } 50%{ opacity:1; transform:scale(1.15); } }
+.news-foot{ padding:8px 14px; border-top:1px solid var(--glass-brd); display:flex; align-items:center; gap:8px; }
+.news-foot .m-note{ flex:1; font-size:.62rem; letter-spacing:.08em; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+#news-dock .music-close{ width:26px; height:26px; border-radius:8px; border:1px solid var(--line); cursor:pointer; background:transparent; color:var(--dim); font-size:.9rem; line-height:1; }
+#news-dock .music-close:hover{ color:#f87171; border-color:#f87171; }
+
+@media (max-width:640px){
+  .key-row input{ width:100%; }
+  .brain-count{ width:100%; margin-left:0; }
+  .orb{ width:112px; height:112px; }
+  #music-dock{ right:10px; bottom:10px; width:calc(100vw - 20px); }
+  .music-frame{ height:210px; }
+  #news-dock{ right:10px; bottom:10px; width:calc(100vw - 20px); }
+  .news-list{ max-height:240px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ TELA 1 — BOOT ═══════════ -->
+<div id="boot" class="screen">
+  <div class="brand-big" id="boot-name">SEXTA-FEIRA</div>
+  <hr class="boot-hr">
+  <div class="boot-sync">SINCRONIZANDO DADOS...</div>
+  <div class="boot-ver">v5.0 · REBUILD</div>
+</div>
+
+<!-- ═══════════ TELA 2 — ATIVAÇÃO ═══════════ -->
+<div id="activation" class="screen">
+  <div class="brand-big" id="act-name">SEXTA-FEIRA</div>
+  <hr class="boot-hr">
+  <button id="btn-activate">► ATIVAR SISTEMA</button>
+  <div class="act-hint">CLIQUE PARA INICIAR</div>
+</div>
+
+<!-- ═══════════ APP ═══════════ -->
+<div id="app">
+  <header>
+    <span class="brand">SEXTA-FEIRA</span>
+    <button id="btn-brain" type="button" title="Mostrar/ocultar Second Brain">🧠</button>
+    <button id="btn-dinamico" type="button" title="Modo DINÂMICO: executa tarefas completas (como o opencode) em vez de uma única ação. CLIQUE com botão direito para forçar.">⚡ DINÂMICO</button>
+<select id="provider" class="provider-select" title="Cérebro do Sexta-Feira">
+      <option value="claude">☁ Claude API (chave)</option>
+      <option value="ollama">🖥 Ollama local (grátis)</option>
+    </select>
+    <select id="modelo" class="provider-select" title="Modelo local (quanto menor, mais rápido)">
+      <option value="qwen2.5:1.5b">⚡qwen2.5:1.5b — rápido</option>
+      <option value="qwen2.5-coder:3b">🐢 qwen2.5-coder:3b — preciso</option>
+      <option value="qwen2.5:0.5b">🚀 qwen2.5:0.5b — ultra-rápido</option>
+      <option value="sexta-1.5b:latest">🧠 sexta-1.5b — personalizado</option>
+      <option value="qwen3:4b">🦾 qwen3:4b — potente</option>
+    </select>
+    <select id="vozkokoro" class="provider-select" title="Voz Kokoro (pt-BR)" style="display:none">
+      <option value="pf_dora">🎙 Dora — Kokoro pt-BR</option>
+      <option value="pm_alex">🎙 Alex — Kokoro pt-BR</option>
+      <option value="pm_santa">🎙 Santa — Kokoro pt-BR</option>
+    </select>
+<div class="key-row" id="key-row">
+      <input id="api-key" type="password" placeholder="cole sua API KEY da Anthropic" autocomplete="off" spellcheck="false">
+      <button class="btn-mini" id="btn-key" type="button">SALVAR</button>
+    </div>
+  </header>
+
+  <div id="rede-info" class="rede-info" data-url="{{REDE_URL}}">
+    <span id="rede-label">Acesse do celular (mesmo Wi-Fi):</span>
+    <a id="rede-link" href="{{REDE_URL}}" target="_blank" rel="noopener">{{REDE_URL}}</a>
+    <button type="button" class="r-close" id="rede-close" title="fechar">×</button>
+  </div>
+
+  <main>
+    <div class="orb-wrap">
+      <div id="orb" class="orb state-idle" title="Clique para ativar a escuta">
+        <div class="orb-core"></div>
+        <div class="orb-ring"></div>
+      </div>
+      <div class="orb-name">SEXTA-FEIRA</div>
+    </div>
+
+    <div class="transcript">
+      <div class="line user empty" id="user-line-box" data-avatar="V"><span class="who">VOCÊ</span><p id="user-line"></p></div>
+      <div class="line jarvis empty" id="jarvis-line-box" data-avatar="SF"><span class="who">SEXTA-FEIRA</span><p id="jarvis-line"></p></div>
+    </div>
+    <div id="status" class="state-idle"><span class="led"></span><span id="status-txt">INICIANDO...</span><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>
+
+    <div class="input-row">
+      <input id="text-input" type="text" placeholder="ou digite e tecle Enter" autocomplete="off">
+      <button class="ctrl-btn" id="btn-mic" title="Ouvir">🎤</button>
+      <button class="ctrl-btn" id="btn-stop" title="Interromper fala">⏹</button>
+    </div>
+  </main>
+
+  <section id="brain">
+    <div class="brain-panel">
+      <div class="brain-bar">
+        <span class="brain-title">🧠 SECOND BRAIN</span>
+        <span class="brain-sub">grafo neural do seu contexto</span>
+        <span class="brain-count" id="brain-count"></span>
+        <button class="btn-mini" id="btn-add" type="button" title="Nova nota">+</button>
+        <button class="btn-mini" id="btn-reload" type="button" title="Recarregar do armazenamento">⟳</button>
+      </div>
+      <div class="graph-wrap" id="graph-container"></div>
+      <div id="legend"></div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════ EDITOR DE NOTA ═══════════ -->
+<div id="modal">
+  <div class="modal-box">
+    <h3 id="modal-title">NOVA NOTA</h3>
+    <label>TÍTULO</label>
+    <input id="ed-title" type="text" maxlength="40">
+    <label>ÁREA</label>
+    <select id="ed-area">
+      <option value="metas">Metas</option>
+      <option value="trabalho">Trabalho</option>
+      <option value="projetos">Projetos</option>
+      <option value="financas">Finanças</option>
+      <option value="aprendizado">Aprendizado</option>
+      <option value="saude">Saúde</option>
+      <option value="relacoes">Relações</option>
+      <option value="meta">Você / Geral</option>
+    </select>
+    <label>CONTEÚDO</label>
+    <textarea id="ed-body" placeholder="O que essa nota guarda?"></textarea>
+    <div class="modal-actions">
+      <button class="btn-mini btn-danger" id="btn-del" type="button">Excluir</button>
+      <button class="btn-mini" id="btn-cancel" type="button">Cancelar</button>
+      <button class="btn-mini btn-save" id="btn-save-note" type="button">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PLAYER DE MÚSICA (embutido) ═══════════ -->
+<div id="music-dock">
+  <div class="music-head" id="music-head">
+    <span class="music-grip" title="Arraste para mover">⠿</span>
+    <span class="m-title">♪ SEXTA-FEIRA MUSIC</span>
+    <div class="music-tabs">
+      <button class="music-tab active" data-src="youtube" type="button">▶ YouTube</button>
+      <button class="music-tab" data-src="spotify" type="button">♫ Spotify</button>
+    </div>
+    <button class="music-close" id="music-close" type="button" title="Fechar player">✕</button>
+  </div>
+  <div class="music-body">
+    <div class="music-search">
+      <input id="music-query" type="text" placeholder="o que você quer ouvir?" autocomplete="off">
+      <button class="music-go" id="music-go" type="button">TOCAR ▶</button>
+    </div>
+    <div class="music-frame" id="music-frame"></div>
+  </div>
+<div class="music-foot">
+    <span class="m-note" id="music-note">DIGITE OU FALE UMA MÚSICA</span>
+    <a class="m-link" id="music-link" href="#" target="_blank" rel="noopener">abrir externo ↗</a>
+  </div>
+</div>
+
+<!-- ═══════════ JANELA DE NOTÍCIAS DO MUNDO (embutida) ═══════════ -->
+<div id="news-dock">
+  <div class="news-head" id="news-head">
+    <span class="music-grip" title="Arraste para mover">⠿</span>
+    <span class="m-title">🗞 SEXTA-FEIRA NEWS</span>
+    <button class="music-close" id="news-close" type="button" title="Fechar janela de notícias">✕</button>
+  </div>
+  <div class="news-body">
+    <div class="news-search">
+      <input id="news-query" type="text" placeholder="notícias do mundo..." autocomplete="off">
+      <button class="news-go" id="news-go" type="button">BUSCAR ▶</button>
+    </div>
+    <div class="news-list" id="news-list">
+      <div class="news-loading"><i></i><i></i><i></i></div>
+    </div>
+  </div>
+  <div class="news-foot">
+    <span class="m-note" id="news-note">NOTÍCIAS DO MUNDO</span>
+  </div>
+</div>
+
+<script>"use strict";
+/* ════════════════════════════════════════════════════════════════
+   CONFIG — respostas da entrevista embutidas (padrões do prompt;
+   edite aqui ou via editor de notas no grafo)
+   ════════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  name: 'Sexta-Feira',
+  address: 'senhor',                       // como ele te chama
+  themeColor: '#00b7ff',                   // azul reator
+  persona: 'formal',                       // formal | relaxado | sarcastico
+  wakeWord: 'ei sexta',                    // minúsculo, sem acento
+  requireWakeWord: false,                  // false = responde a tudo que ouvir
+  voiceGender: 'masculina',                // masculina | feminina
+model: 'claude-sonnet-5',
+  // Modelo local: o seletor "modelo" no header escolhe na hora (padrão rápido
+  // qwen2.5:1.5b; o 3b é mais preciso para código mas ~2x mais lento; 0.5b é
+  // ultra-rápido porém fraco para seguir regras). Este valor é só o fallback.
+ollamaModel: 'qwen2.5:1.5b',
+  ollamaUrl: '',                           // '' = mesma origem (proxy local: servir.ps1 ou SextaFace.exe)
+  kokoroPort: 8086,                        // servidor de voz Kokoro pt-BR (scripts\kokoro_voz.ps1)
+  kokoroVoz: 'pf_dora'                     // pf_dora (Dora, feminina) | pm_alex | pm_santa
+};
+
+/* Áreas fixas do Second Brain (cores obrigatórias do prompt) */
+const AREA = {
+  metas:      { label: 'Metas',       color: '#fbbf24' },
+  trabalho:   { label: 'Trabalho',    color: '#ff5547' },
+  projetos:   { label: 'Projetos',    color: '#8b7cff' },
+  financas:   { label: 'Finanças',    color: '#f7931a' },
+  aprendizado:{ label: 'Aprendizado', color: '#2dd4ff' },
+  saude:      { label: 'Saúde',       color: '#10b981' },
+  relacoes:   { label: 'Relações',    color: '#ec4899' },
+  meta:       { label: 'Você / Geral',color: '#8a90a6' }
+};
+
+/* ════════════════════════════════════════════════════════════════
+   NOTES — notas da entrevista (seed inicial das 8 áreas).
+   As respostas da entrevista podem ser embutidas aqui depois;
+   também dá pra editar tudo clicando nos nós do grafo.
+   ════════════════════════════════════════════════════════════════ */
+let NOTES = [
+  { id: 'n1', area: 'meta',   title: 'você',       body: 'Anthony, usuário do assistente, base em Cajazeiras. A cada conversa a Sexta-Feira aprende mais sobre ele.' },
+  { id: 'n2', area: 'metas',  title: 'metas',      body: 'Metas de curto prazo (3–6 meses) e longo prazo (1–3 anos). Esta nota é o hub central do Second Brain.' },
+  { id: 'n3', area: 'trabalho', title: 'trabalho', body: 'Carreira, empresa, cargo e foco atual de trabalho.' },
+  { id: 'n4', area: 'projetos', title: 'projetos', body: 'Projetos em andamento no momento (ex.: sites, apps, automações).' },
+  { id: 'n5', area: 'financas', title: 'finanças', body: 'Objetivos financeiros (sem valores) e planos de organização.' },
+  { id: 'n6', area: 'aprendizado', title: 'aprendizado', body: 'Estudos, leituras e habilidades que quer desenvolver.' },
+  { id: 'n7', area: 'saude',  title: 'saúde',      body: 'Treino, sono, alimentação e condições de saúde.' },
+  { id: 'n8', area: 'relacoes', title: 'relações', body: 'Família, parceiro(a), sócios e amigos-chave.' }
+];
+
+/* Teia densa: metas é o hub ligado a todas + ligações cruzadas */
+let REL = [
+  ['n2','n1'], ['n2','n3'], ['n2','n4'], ['n2','n5'], ['n2','n6'], ['n2','n7'], ['n2','n8'],
+  ['n1','n3'], ['n1','n4'], ['n1','n5'], ['n1','n8'],
+  ['n3','n4'], ['n3','n6'], ['n4','n6'], ['n4','n5'], ['n5','n6'], ['n5','n8'], ['n6','n7'], ['n7','n8']
+];
+
+/* ═══════════ Utilitários ═══════════ */
+const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const normalize = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+const $ = (id) => document.getElementById(id);
+
+/* ═══════════ Estado global ═══════════ */
+let history = [];          // histórico da sessão (Claude)
+let busy = false;          // true durante pensar + falar (evita auto-escuta)
+function setBusy(v){ busy = v; }
+let listening = false;
+let wakeActive = false;
+let currentState = 'idle';
+let editingId = null;
+let nodeMap = {}, edgePaths = [];
+let pulseRefs = [], pulseStates = [];
+let provider = localStorage.getItem('jarvis_provider') || 'ollama';   // ollama (local, gratis) | claude (precisa chave)
+let dinamico = localStorage.getItem('jarvis_dinamico') === '1';      // modo DINÂMICO: tarefas completas (como opencode)
+
+/* ═══════════ Inicialização ═══════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.documentElement.style.setProperty('--theme', CONFIG.themeColor);
+  document.title = CONFIG.name.toUpperCase() + ' — Assistente de Voz';
+  ['boot-name','act-name'].forEach(id => $(id).textContent = CONFIG.name.toUpperCase());
+  document.querySelectorAll('.brand, .orb-name').forEach(el => el.textContent = CONFIG.name.toUpperCase());
+
+$('provider').value = provider;
+  $('modelo').value = modeloAtivo;
+  applyProviderUI();
+  $('api-key').value = localStorage.getItem('anthropic_key') || '';
+  initRedeInfo();
+  carregarCartilha();
+  initKokoro();
+  loadState();
+  renderGraph();
+initMusicDock();
+  initNewsDock();
+  initBrainToggle();
+  initDinamico();
+  requestAnimationFrame(animatePulses);
+
+  /* Boot → Ativação */
+  setTimeout(() => {
+    $('boot').classList.add('hide');
+    setTimeout(() => {
+      $('boot').style.display = 'none';
+      $('activation').style.display = 'flex';
+      $('activation').style.opacity = '0';
+      requestAnimationFrame(() => { $('activation').style.transition = 'opacity .6s ease'; $('activation').style.opacity = '1'; });
+    }, 560);
+  }, 2200);
+});
+
+/* Seletor de cérebro: Claude API (chave) ou Ollama local (grátis) */
+/* Banner mobile: o exe injeta a URL acessivel da rede em {{REDE_URL}} quando
+   roda com --rede. Neste modo o usuario abre esta mesma pagina no celular. */
+function initRedeInfo(){
+  const el = $('rede-info');
+  if (!el) return;
+  const url = el.dataset.url || '';
+  if (!url || url.indexOf('{{REDE_URL}}') >= 0) return;   // modo local é sem banner
+  el.classList.add('show');
+  const link = $('rede-link');
+  if (link) link.href = url;
+  const closeBtn = $('rede-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => el.classList.remove('show'));
+}
+
+/* Puxa a cartilha de conhecimento servida pelo exe (ou servir.ps1). Se faltar
+   (abriu o index.html direto do disco), segue normal — é só contexto extra. */
+function carregarCartilha(){
+  fetch('cartilha.txt', { signal: AbortSignal.timeout(5000) })
+    .then(r => { if (!r.ok) throw new Error('sem cartilha (HTTP ' + r.status + ')'); return r.text(); })
+    .then(t => {
+      cartilhaTexto = String(t || '').slice(0, 4000);
+      console.log('[cartilha] conhecimento carregado: ' + cartilhaTexto.length + ' chars');
+    })
+    .catch(() => { cartilhaTexto = ''; });
+}
+
+function applyProviderUI(){
+  const isOllama = provider === 'ollama';
+  $('key-row').style.display = isOllama ? 'none' : 'flex';
+}
+$('provider').addEventListener('change', (e) => {
+  provider = e.target.value;
+  localStorage.setItem('jarvis_provider', provider);
+  applyProviderUI();
+  showStatus(provider === 'ollama' ? 'CÉREBRO: OLLAMA LOCAL (SEM CHAVE)' : 'CÉREBRO: CLAUDE API');
+});
+$('vozkokoro').addEventListener('change', (e) => {
+  kokoroVoz = e.target.value;
+  localStorage.setItem('jarvis_kokoro_voz', kokoroVoz);
+  showStatus('VOZ: ' + (kokoroVoz === 'pf_dora' ? 'DORA (KOKORO)' : kokoroVoz === 'pm_alex' ? 'ALEX (KOKORO)' : 'SANTA (KOKORO)'));
+});
+$('modelo').addEventListener('change', (e) => {
+  modeloAtivo = e.target.value;
+  localStorage.setItem('jarvis_modelo', modeloAtivo);
+  showStatus('MODELO: ' + modeloAtivo);
+});
+
+/* Ativar sistema: gesto do usuário que libera microfone + áudio */
+$('btn-activate').addEventListener('click', () => {
+  $('boot').style.display = 'none';
+  $('activation').style.display = 'none';
+  $('app').classList.add('visible');
+  preloadVoices();
+  startRecognition();
+  setState('speaking');
+  setStatus('INICIANDO SISTEMAS...');
+  speak('Sistemas online. Estou ouvindo, ' + CONFIG.address + '.');
+  /* Pedido do chefe: ao executar o exe, a janela de notícias do mundo já abre */
+  setTimeout(() => abrirNoticias('noticias do mundo'), 1800);
+  setTimeout(() => tocarMusica('back in black'), 2400);
+});
+
+/* ═══════════ ESTADO / UI ═══════════ */
+function initBrainToggle(){
+  const btn = $('btn-brain');
+  const brain = $('brain');
+  /* mantém escondido por padrão; volta ao estado salvo pelo usuário */
+  const saved = localStorage.getItem('brain_open');
+  if (saved === '1'){ brain.classList.add('open'); btn.classList.add('active'); }
+btn.addEventListener('click', () => {
+    const open = brain.classList.toggle('open');
+    btn.classList.toggle('active', open);
+    localStorage.setItem('brain_open', open ? '1' : '0');
+  });
+}
+
+/* Modo DINÂMICO (⚡): alterna entre "resposta única" e "agente autônomo".
+   Quando ativo, TODA ordem vira uma tarefa executada passo a passo pelo
+   loop /api/agente (igual o opencode: planeja → executa → verifica → entrega). */
+function initDinamico(){
+  const btn = $('btn-dinamico');
+  if (!btn) return;
+  btn.classList.toggle('active', dinamico);
+  btn.addEventListener('click', () => {
+    dinamico = !dinamico;
+    localStorage.setItem('jarvis_dinamico', dinamico ? '1' : '0');
+    btn.classList.toggle('active', dinamico);
+    showStatus('MODO ' + (dinamico ? 'DINÂMICO ATIVADO — TAREFAS EXECUTADAS PASSO A PASSO' : 'NORMAL'));
+  });
+}
+/* Clique com botão direito força UMA tarefa dinâmica agora (sem mudar o modo) */
+document.addEventListener('contextmenu', (e) => {
+  if (e.target && e.target.closest && e.target.closest('#btn-dinamico')){
+    e.preventDefault();
+    const input = $('text-input');
+    if (!input) return;
+    const t = input.value.trim();
+    if (!t) return;
+    input.value = '';
+    wakeActive = false;
+    setStatus('⚡ FORÇANDO MODO DINÂMICO...');
+    sendToBrain('@forcar: ' + t).catch(err => console.error('[forcar dinamico]', err));
+  }
+});
+function setState(s){
+  currentState = s;
+  $('orb').className = 'orb state-' + s;
+  /* status chip espelha o estado (pausa o equalizador no idle) */
+  const st = $('status');
+  st.className = st.className.replace(/state-[\w-]+/g, '').trim() + ' state-' + s;
+}
+function setStatus(t){
+  const el = $('status-txt');
+  if (el) el.textContent = t; else $('status').textContent = t;
+}
+function setUserLine(t){
+  $('user-line').textContent = t;
+  $('user-line-box').classList.remove('empty');
+}
+function setJarvisLine(t){
+  $('jarvis-line').textContent = t;
+  $('jarvis-line-box').classList.remove('empty');
+}
+function showStatus(t){
+  setStatus(t);
+  setTimeout(() => { if (!busy && currentState === 'idle') setStatus('Ouvindo...'); }, 5000);
+}
+function flashKeyRow(){
+  const row = $('key-row');
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 900);
+}
+
+/* ═══════════ VOZ — TTS ═══════════ */
+let cachedVoices = [];
+function loadVoices(){ cachedVoices = speechSynthesis.getVoices(); }
+function preloadVoices(){
+  if (!('speechSynthesis' in window)) return;
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+  setTimeout(loadVoices, 300);
+}
+function pickVoice(){
+  if (!cachedVoices.length) cachedVoices = speechSynthesis.getVoices();
+  const pts = cachedVoices.filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+  if (!pts.length) return null;
+  const wantFemale = CONFIG.voiceGender === 'feminina';
+  const match = pts.find(v => wantFemale
+    ? /female|mulher|feminina|luciana|maria|helena/i.test(v.name)
+    : /male|homem|masculino|felipe|fabricio|ricardo/i.test(v.name));
+  if (match) return match;
+  return wantFemale ? pts[pts.length - 1] : pts[0];
+}
+let speakTimer = null;   // watchdog: Chrome pode nunca disparar onstart (bug conhecido)
+let speechQueue = 0;     // TTS incremental (streaming): quantas frases estao na fila de fala
+let streamFalou = false; // ja falou algo durante o streaming? (evita falar 2x a mesma resposta)
+let ecoGuardUntil = 0;   // ate quando descartar resultados do STT apos a propria fala
+
+/* Religamento seguro do microfone: so retoma a escuta quando a Dora terminou
+   de falar DE VERDADE (fila Kokoro vazia, sem Audio tocando, sem queue do
+   speechSynthesis). Evita que a face "ouca a propria voz" (eco do alto-falante)
+   e entre em loop respondendo a si mesma. */
+function retomarEscuta(delay){
+  setBusy(false);
+  setState('idle');
+  setStatus('Ouvindo...');
+  if (kokoroFila.length > 0 || kokoroTrabalhando) return;  // Dora ainda falando: o fim da fila religa
+  if (kokoroAtual || speechQueue > 0) return;              // defensivo: Audio/utterance ainda ativo
+  setTimeout(() => {
+    if (!busy && !listening && !kokoroTrabalhando && !kokoroAtual && speechQueue <= 0){
+      startRecognition();
+    }
+  }, delay || 350);
+}
+
+/* Encerra um ciclo de fala: destrava microfone + estado idle + guarda anti-eco */
+function endSpeakCycle(){
+  clearTimeout(speakTimer);
+  ecoGuardUntil = Date.now() + 900;   // descarta resultados atrasados do eco
+  retomarEscuta(500);
+}
+
+/* Fala enfileirando (sem cancelar) � usado pelo streaming: a resposta vai
+   saindo em frases e vai sendo falada enquanto o restante ainda e gerado. */
+function speakQueued(text){
+  if (!text) return false;
+  if (kokoroOn) return kokoroFalar(text);          // voz neural local (Kokoro pt-BR)
+  if (!('speechSynthesis' in window)) return false;
+  streamFalou = true;
+  const u = new SpeechSynthesisUtterance(String(text));
+  const v = pickVoice();
+  if (v) u.voice = v;
+  u.lang = 'pt-BR'; u.rate = 1; u.pitch = 1;
+  speechQueue++;
+  const fin = () => {
+    speechQueue--;
+    if (speechQueue <= 0){ speechQueue = 0; endSpeakCycle(); }
+  };
+  u.onend = fin;
+  u.onerror = fin;
+  speechSynthesis.speak(u);
+  /* watchdog: se a fila travar (bug do Chrome), libera o microfone mesmo assim */
+  clearTimeout(speakTimer);
+  speakTimer = setTimeout(() => {
+    if (speechQueue > 0){ try { speechSynthesis.cancel(); } catch(e){} speechQueue = 0; endSpeakCycle(); }
+  }, 12000);
+  return true;
+}
+
+function speak(text){
+  clearTimeout(speakTimer);
+  if (!text) return;
+  if (kokoroOn){ return kokoroFalar(text, { completa: true }); }
+  if (!('speechSynthesis' in window)){ showStatus('Fala (TTS) não suportada neste navegador.'); return; }
+  speechSynthesis.cancel();
+  setBusy(true);                         // trava o microfone JÁ — sem gap para eco
+  setState('speaking');
+  streamFalou = false;
+  speechQueue = 1;
+  const u = new SpeechSynthesisUtterance(text);
+  const v = pickVoice();
+  if (v) u.voice = v;
+  u.lang = 'pt-BR'; u.rate = 1; u.pitch = 1;
+  const finish = () => {
+    clearTimeout(speakTimer);
+    speechQueue = 0;
+    endSpeakCycle();
+  };
+  u.onstart = () => { clearTimeout(speakTimer); setStatus('FALANDO...'); };
+  u.onend = finish;
+  u.onerror = finish;
+  speechSynthesis.speak(u);
+  /* Se o onstart não vier em 3s (bug do Chrome), destrava o microfone mesmo assim */
+  speakTimer = setTimeout(finish, 3000);
+}
+function stopSpeaking(){ pararFalaAtual(); }
+
+/* ═══════════ VOZ — KOKORO-82M (pt-BR, pf_dora) via servidor local ═══════════
+   O servidor local (scripts\kokoro_voz.ps1 → servidor_voz.py, porta 8086) gera
+   WAVs com o modelo neural Kokoro-82M (voz pf_dora, muito mais natural que o
+   speechSynthesis do navegador). Sempre com fallback para a voz do sistema. */
+let kokoroOn = false;                  // servidor Kokoro detectado e respondendo
+let kokoroVoz = localStorage.getItem('jarvis_kokoro_voz') || CONFIG.kokoroVoz || 'pf_dora';
+let kokoroFila = [];                   // frases aguardando geração/reprodução
+let kokoroGeracao = 0;                 // token de cancelamento
+let kokoroTrabalhando = false;         // worker da fila ativo
+let kokoroAtual = null;                // Audio em reprodução agora
+let kokoroWatchdog = null;             // trava de segurança da fila
+let kokoroFalhas = 0;                  // falhas consecutivas (3 = desliga + re-detecta)
+let kokoroCooldown = 0;                // até quando fica na voz do navegador após 1 falha
+
+/* Modelo local ativo (persistido); padrão rápido — o 3b segue disponível no seletor */
+let modeloAtivo = localStorage.getItem('jarvis_modelo') || CONFIG.ollamaModel || 'qwen2.5:1.5b';
+
+/* Cartilha de conhecimento (web/cartilha.txt servido pelo exe): ensina modelo
+   pequeno com tudo que a Sexta aprendeu (memória acumulada + exemplos ideais). */
+let cartilhaTexto = '';
+
+function kokoroBaseUrl(){
+  /* local: 127.0.0.1:8086; rede local (celular no Wi-Fi): IP-da-maquina:8086;
+     em HTTPS (modo EXTERNO via tunel) a voz vem pela MESMA origem usando o
+     proxy /voz/ do proprio servidor — evita 'mixed content' (https pedindo
+     http), que o navegador bloqueia. */
+  if (location.protocol === 'https:') return '/voz';
+  let host = (location.hostname || '127.0.0.1');
+  if (host === 'localhost' || host === '') host = '127.0.0.1';
+  return 'http://' + host + ':' + (CONFIG.kokoroPort || 8086);
+}
+
+async function detetarKokoro(){
+  try {
+    const res = await fetch(kokoroBaseUrl() + '/api/voz', { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return false;
+    const info = await res.json();
+    return !!(info && info.ok === true);
+  } catch (e){ return false; }
+}
+
+async function initKokoro(){
+  let ok = false;
+  for (let t = 0; t < 3 && !ok; t++){       // servidor pode estar 'carregando' o modelo
+    ok = await detetarKokoro();
+    if (!ok){ await new Promise(r => setTimeout(r, 800)); }
+  }
+  if (ok){
+    kokoroOn = true;
+    kokoroFalhas = 0;
+    kokoroCooldown = 0;
+    const sel = $('vozkokoro');
+    if (sel){ sel.style.display = 'inline-block'; sel.value = kokoroVoz; }
+    console.log('[kokoro] voz local pronta: ' + kokoroVoz);
+  } else {
+    console.log('[kokoro] servidor de voz não detectado — usando voz do navegador');
+  }
+}
+
+/* Corta QUALQUER fala em andamento (sistema ou Kokoro) */
+function pararFalaAtual(){
+  if ('speechSynthesis' in window){ try { speechSynthesis.cancel(); } catch (e){} }
+  kokoroParar();
+  speechQueue = 0;
+}
+
+function kokoroParar(){
+  kokoroGeracao++;                     // invalida gerações pendentes
+  kokoroFila = [];
+  const atual = kokoroAtual;
+  kokoroAtual = null;
+  if (atual){ try { atual.pause(); atual.src = ''; } catch (e){} }
+  clearTimeout(kokoroWatchdog);
+}
+
+async function kokoroGerarWav(texto){
+  const url = kokoroBaseUrl() + '/api/tts?text=' + encodeURIComponent(texto) +
+              '&voz=' + encodeURIComponent(kokoroVoz) + '&velocidade=1.0';
+  const res = await fetch(url, { signal: AbortSignal.timeout(45000) });
+  if (!res.ok) throw new Error('tts http ' + res.status);
+  return URL.createObjectURL(await res.blob());
+}
+
+/* Worker da fila: gera e toca em ordem. Falha pontual → só AQUELA frase cai para
+   a voz do navegador (com cooldown de 8s). 3 falhas seguidas → desliga o modo
+   Kokoro e re-detecta o servidor em 60s. Nunca derruba a resposta inteira. */
+async function processarFilaKokoro(ger){
+  setBusy(true);
+  setState('speaking');
+  setStatus('FALANDO...');
+  while (kokoroFila.length && ger === kokoroGeracao){
+    const item = kokoroFila.shift();
+    if (!item || !item.texto) continue;
+    /* cooldown: falhou há pouco → voz do navegador nesta fase, depois volta */
+    if (!kokoroOn || Date.now() < kokoroCooldown){
+      try { systemSpeak(item.texto); } catch (_){}
+      continue;
+    }
+    try {
+      const url = await kokoroGerarWav(item.texto);
+      if (ger !== kokoroGeracao){ URL.revokeObjectURL(url); break; }
+      kokoroFalhas = 0;   // sucesso: zera o contador de falhas
+      await new Promise((resolve) => {
+        const a = new Audio(url);
+        kokoroAtual = a;
+        a.onended = () => { if (kokoroAtual === a) kokoroAtual = null; URL.revokeObjectURL(url); resolve(); };
+        a.onerror = () => { if (kokoroAtual === a) kokoroAtual = null; URL.revokeObjectURL(url); resolve(); };
+        a.play().catch(() => { if (kokoroAtual === a) kokoroAtual = null; URL.revokeObjectURL(url); resolve(); });
+        clearTimeout(kokoroWatchdog);
+        kokoroWatchdog = setTimeout(() => { if (kokoroAtual === a) kokoroAtual = null; resolve(); }, 20000);
+      });
+    } catch (e){
+      console.warn('[kokoro] falha nesta frase, usando voz do navegador:', e);
+      kokoroFalhas++;
+      if (ger === kokoroGeracao && !streamFalou){ try { systemSpeak(item.texto); } catch (_){} }
+      if (kokoroFalhas >= 3){
+        /* servidor instável/fora: desliga e re-tenta em 60s (a fila segue na voz do sistema) */
+        kokoroOn = false;
+        kokoroFalhas = 0;
+        const sel = $('vozkokoro'); if (sel) sel.style.display = 'none';
+        console.warn('[kokoro] 3 falhas seguidas — voz local desligada, re-testando em 60s');
+        setTimeout(() => { if (!kokoroOn) initKokoro(); }, 60000);
+      } else {
+        kokoroCooldown = Date.now() + 8000;   // tenta de novo daqui a 8s
+      }
+    }
+  }
+  kokoroTrabalhando = false;
+  clearTimeout(kokoroWatchdog);
+  if (ger === kokoroGeracao && kokoroFila.length === 0 && !kokoroTrabalhando){
+    endSpeakCycle();
+  }
+}
+
+function kokoroFalar(texto, opts){
+  if (!texto) return false;
+  opts = opts || {};
+  streamFalou = true;
+  if (opts.completa){
+    /* resposta completa: corta qualquer fala/fila anterior e fala só isso */
+    pararFalaAtual();
+    kokoroGeracao++;                     // separa da fila do streaming anterior
+    setBusy(true);
+    setState('speaking');
+    streamFalou = false;
+  }
+  kokoroFila.push({ texto: String(texto) });
+  if (!kokoroTrabalhando){
+    kokoroTrabalhando = true;
+    processarFilaKokoro(kokoroGeracao);
+  }
+  return true;
+}
+
+/* Voz do navegador quando o Kokoro não está disponível */
+function systemSpeak(text){
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(String(text));
+  const v = pickVoice();
+  if (v) u.voice = v;
+  u.lang = 'pt-BR'; u.rate = 1; u.pitch = 1;
+  speechSynthesis.speak(u);
+}
+
+/* ═══════════ VOZ — STT (reconhecimento contínuo robusto, anti-eco e anti-corte) ═══════════ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let sttBuffer = '';
+let sttTimer = null;
+let restartDelay = 300;       // delay progressivo entre reinícios (evita loop infinito)
+let stoppedManual = false;    // pausa manual → onend NÃO reinicia
+
+function commitStt(){
+  if (sttTimer){ clearTimeout(sttTimer); sttTimer = null; }
+  const text = sttBuffer.trim();
+  sttBuffer = '';
+  if (text.length < 2) return;
+  showStatus('OUVI: ' + text);
+  onUserInput(text);
+}
+function scheduleCommit(ms){
+  if (sttTimer) clearTimeout(sttTimer);
+  sttTimer = setTimeout(commitStt, ms);
+}
+
+function startRecognition(){
+  if (!SR){ showStatus('Reconhecimento de voz não suportado neste navegador (use o Chrome).'); return; }
+  if (busy || listening) return;
+  stoppedManual = false;
+  if (!recognition){ criarRecognition(); }
+  try { recognition.start(); listening = true; restartDelay = 300; setStatus('Ouvindo...'); }
+  catch(e){ /* já iniciado */ }
+}
+
+function stopRecognition(){
+  if (sttTimer){ clearTimeout(sttTimer); sttTimer = null; }
+  if (recognition && listening){ try { recognition.stop(); } catch(e){} }
+  listening = false;
+}
+
+function criarRecognition(){
+  recognition = new SR();
+  recognition.lang = 'pt-BR';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+recognition.onresult = (event) => {
+    if (busy || Date.now() < ecoGuardUntil || kokoroAtual || speechQueue > 0){
+      sttBuffer = ''; return;   // eco da propria voz / guarda pos-fala — descarta
+    }
+    let finais = '', parciais = '';
+    for (let i = event.resultIndex; i < event.results.length; i++){
+      const r = event.results[i];
+      if (!r || !r[0]) continue;
+      if (r.isFinal) finais += ' ' + r[0].transcript;   // acumula o definitivo
+      else parciais = r[0].transcript;                  // só o último interim
+    }
+    sttBuffer += finais;
+    parciais = parciais.trim();
+    setStatus(parciais ? 'OUVINDO: ' + parciais : 'Ouvindo...');
+    /* A pessoa AINDA está falando (novo resultado chegou): o timer pendente é
+       cancelado e rearmado — a pergunta inteira entra em ritmo de conversa.
+       Só commitamos com silêncio real de verdade. */
+    scheduleCommit(2500);
+  };
+
+  recognition.onaudioend = () => {
+    /* O browser sentiu pausa. Folga GRANDE (1.8s) para o ritmo de conversa:
+       se a pessoa só respira/engasga entre as frases, um novo onresult chega
+       antes e CANCELA este commit pendente (scheduleCommit rearma). Antes era
+       600ms — por isso ele cortava "a pergunta toda" em pausas normais. */
+    scheduleCommit(1800);
+  };
+
+  recognition.onend = () => {
+    const wasListening = listening;   // era escuta ativa (não pausa manual)?
+    listening = false;
+    commitStt();
+    if (!busy && wasListening && !stoppedManual){
+      // Chrome para sozinho: reinicia com pequena folga (evita invalid state e loop)
+      restartDelay = Math.min(restartDelay * 1.5, 3000);
+      setTimeout(() => { if (!busy && !listening && !stoppedManual) iniciarEscuta(); }, restartDelay);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      showStatus('Permissão do microfone negada. Habilite o microfone nas configurações do navegador.');
+      stoppedManual = true;   // não tenta de novo sozinho (vai falhar sempre)
+      return;
+    }
+    // erros recuperáveis: o Chrome derruba a escuta — o onend cuida do restart
+    if (e.error === 'no-speech' || e.error === 'network' || e.error === 'aborted'){
+      return;
+    }
+  };
+}
+
+function iniciarEscuta(){
+  if (busy || listening || stoppedManual) return false;
+  if (!recognition) criarRecognition();
+  try { recognition.start(); listening = true; return true; }
+  catch(e){ listening = false; return false; }
+}
+
+/* Clique no orbe: alterna a escuta manualmente (retoma se parou) */
+$('orb').addEventListener('click', () => {
+  if (busy){ stopSpeaking(); setBusy(false); setState('idle'); }
+  if (sttTimer){ clearTimeout(sttTimer); sttTimer = null; }
+  sttBuffer = '';
+  if (listening){
+    stoppedManual = true;
+    stopRecognition();
+    setStatus('ESCUTA PAUSADA — clique no orbe para retomar');
+  } else {
+    startRecognition();
+    setStatus('ESCUTANDO...');
+  }
+});
+
+/* ═══════════ Wake word + roteamento de entrada ═══════════ */
+function onUserInput(raw){
+  const normalized = normalize(raw);
+  if (!CONFIG.requireWakeWord){
+    /* Modo direto: qualquer frase é um comando. Se a wake word veio junto, remove. */
+    const rest = normalized.replace(CONFIG.wakeWord, '').trim();
+    if (!rest || rest.length < 2) return;
+    sendToBrain(raw);
+    return;
+  }
+  if (!wakeActive){
+    if (normalized.includes(CONFIG.wakeWord)){
+      wakeActive = true;
+      setStatus('ATIVADO — AGUARDANDO COMANDO');
+      speak('Sim, ' + CONFIG.address + '. Diga o que precisa.');
+      const rest = normalized.replace(CONFIG.wakeWord, '').trim();
+      if (rest.length > 1) onUserInput(raw);   // comando veio junto na mesma frase
+    }
+    return;
+  }
+  const rest = normalized.replace(CONFIG.wakeWord, '').trim();
+  if (rest.length < 2) return;                 // só a wake word — segue aguardando
+  wakeActive = false;
+  sendToBrain(raw);
+}
+
+$('text-input').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const t = e.target.value.trim();
+  if (!t) return;
+  e.target.value = '';
+  wakeActive = false;
+  sendToBrain(t).catch(e => console.error('[text-input] sendToBrain error:', e));
+});
+$('btn-mic').addEventListener('click', () => startRecognition());
+$('btn-stop').addEventListener('click', () => { stopSpeaking(); setStatus('FALA INTERROMPIDA'); });
+
+/* ═══════════ CÉREBRO — Ollama local (grátis, offline, sem chave) ═══════════
+   Rota via jarvis-site/servir.ps1 (proxy CORS → http://localhost:11434).
+   Mesmo system prompt (personalidade + Second Brain inteiro) do Claude. */
+
+/* Palavras-chave que indicam pergunta factual/recente — dispara busca na web. */
+const WEB_KEYWORDS = [
+  'jogo', 'placar', 'resultado', 'campeonato', 'partida', 'rodada', 'gol', 'gols',
+  'noticia', 'notícia', 'noticias', 'notícias', 'hoje', 'ontem', 'amanha', 'amanhã',
+  'quem ganhou', 'quanto foi', 'quem venceu', 'eleicao', 'eleição', 'preco', 'preço',
+  'clima', 'temperatura', 'tempo agora', 'cotacao', 'cotação', 'dolar', 'euro',
+  'whatsapp', 'tiktok', 'lançamento', 'lancamento', 'estreia', 'data de',
+  'campeao', 'campeão', 'tabela', 'classificacao', 'classificação', 'final'
+];
+
+function needsWebSearch(text){
+  const n = normalize(text);
+  return WEB_KEYWORDS.some(k => n.includes(k));
+}
+
+/* ═══════════ MODO DINÂMICO (agente autônomo estilo opencode) ═══════════
+   Detecta ordens de TAREFA (não perguntas): verbos de criar/implementar/
+   corrigir/organizar + objeto = tarefa de múltiplos passos. Pode ser
+   forçado pelo botão ⚡ DINÂMICO (dinamico=true). */
+const TAREFA_KEYWORDS = [
+  'crie um', 'cria um', 'criar um', 'crie o', 'cria o', 'criar o', 'monte', 'monte um',
+  'implemente', 'implementar', 'desenvolva', 'desenvolver', 'construa', 'construir',
+  'corrija', 'corrigir', 'corrija o', 'arrume', 'conserte', 'faça um', 'faça o', 'faca um',
+  'faça o site', 'faça o app', 'faça o projeto', 'crie o site', 'crie o app', 'crie o projeto',
+  'crie um site', 'crie um app', 'crie um projeto', 'gere', 'gerar', 'gere um', 'gere o',
+  'criar uma', 'crie uma', 'cria uma', 'faça uma', 'faca uma', 'monte uma',
+  'organize', 'organizar', 'configure', 'configurar', 'prepare', 'preparar',
+  'refatore', 'refatorar', 'traduza', 'traduzir', 'instale', 'instalar', 'crie o codigo',
+  'escreva um', 'escreva o', 'escreva um codigo', 'escreva o codigo', 'crie um codigo',
+  'tarefa', 'missao', 'tem que fazer', 'precisa fazer', 'voce precisa', 'precisas',
+  'gere o codigo', 'gere um codigo', 'crud', 'pagina completa', 'site completo',
+  'transforme', 'transformar', 'converta', 'converter', 'migre', 'migrar',
+  'adicione uma', 'adicione um', 'adicionar um', 'adicionar uma', 'coloque um', 'coloque uma',
+  'verifique o', 'verifique a', 'verifique todos', 'avalie o', 'avalie a', 'audite', 'auditar',
+  'resolva', 'resolver', 'buffer', 'depure', 'debug', 'depurar', 'o que falta para',
+  'como fazer para', 'tem algum erro', 'está com erro', 'esta com erro'
+];
+
+function isTarefaDinamica(text){
+  const n = normalize(text);
+  if (n.startsWith('@forcar')) return true;   // clique com botão direito no ⚡
+  if (dinamico) return true;                  // botão ligado: tudo vira tarefa
+  /* Fileiras pai são conversa — negócios simples (saudação, pergunta curta) não são tarefa */
+  if (n.length < 25) return false;
+  return TAREFA_KEYWORDS.some(k => n.includes(k));
+}
+
+/* Executa UMA tarefa no modo agente (/api/agente): loop no servidor que
+   chama o modelo → executa ações reais → realimenta resultado → até concluir.
+   Mostra o progresso passo a passo no status e fala o resumo final. */
+function dinStatus(acao, alvo, passo, total){
+  const desc = {
+    'buscar-arquivos':   ('BUSCANDO ARQUIVOS' + (alvo ? ' EM ' + alvo : '')),
+    'procurar-texto':    'PROCURANDO TEXTO...',
+    'ler-arquivo':       'LENDO ARQUIVO...',
+    'escrever-arquivo':  'ESCREVENDO ARQUIVO...',
+    'editar-arquivo':    'EDITANDO ARQUIVO...',
+    'executar':          'EXECUTANDO COMANDO...',
+    'listar-pasta':      'LISTANDO PASTA...',
+    'memoria-consultar': 'CONSULTANDO MEMÓRIA...',
+    'memoria-registrar': 'REGISTRANDO NA MEMÓRIA...',
+    'abrir-projeto':     'ABRINDO PROJETO...',
+    'abrir-vscode':      'ABRINDO VS CODE...',
+    'abrir-site':        'ABRINDO SITE...',
+    'baixar-arquivo':    'BAIXANDO ARQUIVO...',
+    'criar-documento':   'CRIANDO DOCUMENTO...',
+    'criar-planilha':    'CRIANDO PLANILHA...',
+    'criar-apresentacao':'CRIANDO APRESENTAÇÃO...'
+  }[acao] || 'EXECUTANDO ' + String(acao || '').toUpperCase() + '...';
+  setStatus('⚡ PASSO ' + passo + '/' + total + ': ' + desc);
+}
+
+async function executarTarefa(userText){
+  try {
+    const forcar = normalize(userText).startsWith('@forcar');
+    const tarefa = forcar ? userText.replace(/^@forcar\s*/i, '').trim() : userText;
+
+    /* Registra no histórico como usuário (contexto fiel à sessão) */
+    history.push({ role: 'user', content: tarefa });
+
+    const res = await fetch(CONFIG.ollamaUrl + '/api/agente', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tarefa,
+        model: modeloAtivo,
+        maxPassos: 8
+      })
+    });
+    if (!res.ok){
+      let detail = '';
+      try { const eb = await res.json(); if (eb && eb.error) detail = eb.error; } catch (e){}
+      const msg = 'Modo dinâmico falhou (' + res.status + '). ' + detail;
+      showStatus(msg); speak(msg);
+      history.pop();
+      retomarEscuta(300);
+      return;
+    }
+    const data = await res.json();
+    if (!data || data.ok === false){
+      const msg = 'Modo dinâmico falhou: ' + (data && data.mensagem ? data.mensagem : 'desconhecido');
+      showStatus(msg); speak(msg);
+      history.pop();
+      retomarEscuta(300);
+      return;
+    }
+
+    /* Progresso falado e no status — passo a passo, como um agente de verdade */
+    const passos = data.passos || [];
+    let falaPassos = '';
+    passos.forEach((p, i) => {
+      if (p && p.acao && p.resultado){
+        const statusDesc = dinStatus(p.acao, p.alvo, i + 1, passos.length);
+        falaPassos += (i > 0 ? '. ' : '') + 'Passo ' + (i + 1) + ': ' + statusDesc;
+      }
+    });
+
+    let final = data.final || 'Tarefa concluída.';
+    history.push({ role: 'assistant', content: final });
+    if (history.length > 30) history = history.slice(-30);
+
+    setStatus('TAREFA CONCLUÍDA ✓');
+    setJarvisLine(final);
+    pararFalaAtual();
+    if (falaPassos){
+      setStatus('⚡ ' + passos.length + ' PASSOS REALIZADOS');
+      /* fala os passos e em seguida o resumo (fila nativa encadeia sem cortes) */
+      speakQueued(falaPassos + '. Em resumo: ' + final);
+      return;
+    }
+    speak(final);
+  } catch (err){
+    console.error('[executarTarefa]', err);
+    const msg = 'Não consegui rodar o modo dinâmico. Verifique a conexão e tente de novo.';
+    showStatus(msg); speak(msg);
+    retomarEscuta(300);
+  }
+}
+
+/* Busca via endpoint local /api/search (proxy do servidor PS ou do .exe),
+   que consulta DuckDuckGo (away from CORS). Retorna texto resumido ou null. */
+async function searchWeb(query){
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000); // busca agora leva ~1-3s; 12s de folga p/ fontes lentas
+    const res = await fetch(CONFIG.ollamaUrl + '/api/search?q=' + encodeURIComponent(query), { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data) return null;
+
+    const parts = [];
+    if (data.answer && String(data.answer).trim()) parts.push(data.answer.trim());
+    (data.results || []).slice(0, 4).forEach(r => {
+      if (r.title && r.title.trim()) parts.push('• ' + r.title.trim());
+      if (r.snippet && r.snippet.trim()) parts.push('  ' + r.snippet.trim());
+    });
+    if (!parts.length) return null;
+    return parts.join('\n');
+  } catch (e){ return null; }
+}
+
+/* Separa o texto em frases completas (terminadas em . ! ? \n) para falar enquanto chega */
+function cortarFrases(texto){
+  const frases = [];
+  let resto = texto;
+  let m;
+  const re = /^[\s\S]*?[.!?](?=\s|$)/;
+  while ((m = resto.match(re)) && m[0].trim()){
+    frases.push(m[0].trim());
+    resto = resto.slice(m[0].length);
+    if (frases.length >= 8) break; // protecao: nunca acumula mais de 8 frases na fila
+  }
+  return { frases, resto: resto.trim() };
+}
+
+/* L� o stream NDJSON do servidor local e fala em voz parcial (resposta aparece
+   enquanto ainda est� sendo gerada � sensa��o de velocidade muito maior). */
+async function lerStream(res){
+  const reader = res.body.getReader();
+  const dec = new TextDecoder('utf-8');
+  let buf = '';
+  let total = '';
+  let ttsAtivo = true;          // se aparecer [[A��O...]] no meio, corta a fala parcial
+  let pendentes = [];
+
+  const falarPendente = () => {
+    if (!ttsAtivo) return;
+    const { frases, resto } = cortarFrases(pendentes.join(' '));
+    frases.forEach(f => speakQueued(f));
+    pendentes = resto ? [resto] : [];
+  };
+
+  while (true){
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n')) >= 0){
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line.startsWith('data:')) continue;
+      const json = line.slice(5).trim();
+      if (!json || json === '[DONE]') continue;
+      try {
+        const d = JSON.parse(json);
+        const chunk = (d.message && d.message.content) ? String(d.message.content) : '';
+        if (!chunk) continue;
+        total += chunk;
+        if (total.includes('[[')) ttsAtivo = false;   // tag de a��o entra � para de falar aos peda�os
+        if (ttsAtivo) pendentes.push(chunk);
+      } catch (e) { /* linha parcial/ru�do � ignora */ }
+    }
+    if (ttsAtivo) falarPendente();
+  }
+  if (ttsAtivo){ falarPendente(); }
+  return total.trim();
+}
+
+async function askOllama(userText){
+  history.push({ role: 'user', content: userText });
+  const messages = [{ role: 'system', content: buildSystemPrompt() }, ...history];
+
+  /* Busca na web quando a pergunta parece factual/recente (jogo, placar,
+     notícia, preço, resultado, quem ganhou, quanto foi, etc.). */
+  let webCtx = null;
+  if (needsWebSearch(userText)){
+    setStatus('BUSCANDO NA WEB (WIKIPEDIA + NOTICIAS)...');
+    webCtx = await searchWeb(userText);
+    if (webCtx){
+      messages.unshift({
+        role: 'system',
+        content: 'Informações frescas da web (use como fonte para responder com precisão):\n' +
+                 webCtx.slice(0, 1500)
+      });
+    }
+  }
+
+  try {
+    let res = null;
+    const body = {
+      messages,
+      model: modeloAtivo,                          // seletor de modelo (rápido por padrão)
+      stream: true,                                // resposta em tempo real (SSE)
+      options: { temperature: 0.5, num_predict: 120 }   // curto = rápido: corta a enrolação
+    };
+    for (let attempt = 0; attempt < 3; attempt++){
+      if (attempt > 0){
+        setStatus('INICIANDO CÉREBRO LOCAL...');
+        await new Promise(r => setTimeout(r, 4000));   // espera o auto-start do Ollama
+      }
+      res = await fetch(CONFIG.ollamaUrl + '/api/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) break;
+      if (res.status !== 503) break;   // so tenta de novo quando o cerebelo estava offline
+    }
+    if (!res.ok){
+      let detail = '';
+      try {
+        const errBody = await res.json();
+        if (errBody && errBody.error) detail = errBody.error;
+      } catch (e) { /* resposta nao era JSON */ }
+      const msg = 'O cérebro local falhou (' + res.status + '). ' + detail;
+      showStatus(msg); speak(msg);
+      history.pop();
+      return null;
+    }
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const podeStream = res.body && typeof res.body.getReader === 'function' && ct.indexOf('text/event-stream') >= 0;
+    if (podeStream){
+      setStatus('RESPONDENDO...');
+      let text;
+      try {
+        text = await lerStream(res);
+      } catch (e){
+        text = '';
+      }
+      if (!text){
+        const msg = 'O Ollama respondeu vazio. Tente de novo.';
+        showStatus(msg); speak(msg);
+        history.pop();
+        return null;
+      }
+      history.push({ role: 'assistant', content: text });
+      if (history.length > 30) history = history.slice(-30);
+      return text;
+    }
+    /* fallback: resposta completa (servidor antigo sem streaming) */
+    const data = await res.json();
+    let text = (data && data.response) ? data.response.trim() : '';
+    if (!text){
+      const msg = 'O Ollama respondeu vazio. Tente de novo.';
+      showStatus(msg); speak(msg);
+      history.pop();
+      return null;
+    }
+    history.push({ role: 'assistant', content: text });
+    if (history.length > 30) history = history.slice(-30);
+    return text;
+  } catch (err){
+    const msg = 'Não consegui conectar ao Ollama local. Certifique-se de que o Ollama está rodando e abra este site pelo SextaFace.exe ou .\\jarvis-site\\servir.ps1.';
+    showStatus(msg); speak(msg);
+    history.pop();
+    return null;
+  }
+}
+
+/* ═══════════ CÉREBRO — API da Anthropic (Claude) ═══════════ */
+$('btn-key').addEventListener('click', () => {
+  const k = $('api-key').value.trim();
+  if (k){ localStorage.setItem('anthropic_key', k); showStatus('CHAVE SALVA'); }
+  else { localStorage.removeItem('anthropic_key'); showStatus('CHAVE REMOVIDA'); }
+});
+
+async function sendToBrain(userText){
+  try {
+    setBusy(true);
+    wakeActive = false;
+    streamFalou = false;
+    setUserLine(userText);
+    setState('thinking');
+    setStatus('PROCESSANDO...');
+    stopRecognition();          // pára o microfone durante pensar/falar (evita eco)
+
+    /* MODO DINÂMICO (⚡): tarefas completas estilo opencode — planeja, executa
+       passo a passo, verifica e entrega. Ativado pelo botão, por clique direito
+       (força) ou automaticamente quando a ordem é claramente uma TAREFA. */
+    if (isTarefaDinamica(userText)){
+      setStatus('⚡ INICIANDO TAREFA...');
+      /* range rápido: abertura direta (projeto/pasta/site) não gasta o agente */
+      const direta = await tryDirectAction(userText);
+      if (direta){
+        retomarEscuta(300);
+        return;
+      }
+      await executarTarefa(userText);
+      return;
+    }
+
+    /* Intenção direta: "abra o projeto X" executa NA HORA, sem depender do modelo */
+    if (await tryDirectAction(userText)) return;
+
+    /* Resposta relâmpago (0 modelos, 0 latência): cumprimento, agradecimento,
+       despedida, identidade, hora/data — fala na hora sem chamar o Ollama/Claude */
+    const rapida = respostaRapida(userText);
+    if (rapida !== null){
+      pararFalaAtual();
+      setJarvisLine(rapida);
+      if (rapida){
+        speak(rapida);                       // animação fala; endSpeakCycle religa o microfone
+      } else {
+        retomarEscuta(300);
+      }
+      return;
+    }
+
+    const answer = provider === 'ollama' ? await askOllama(userText) : await askClaude(userText);
+    /* NOTE: NUNCA fazer setBusy(false) aqui enquanto a Dora ainda fala a fila
+       do streaming — a face captaria o proprio eco e responderia a si mesma.
+       O religamento ficou centralizado em retomarEscuta() (e endSpeakCycle). */
+    if (answer === null){
+      retomarEscuta(300);
+      return;
+    }
+    let corrigida = forcarIdentidade(answer, userText);
+    const cleanBase = processSaves(corrigida);
+    const { texto, resumo } = await processActions(cleanBase);
+    const fala = texto.trim() || resumo;
+    setJarvisLine(fala);
+    if (fala && !streamFalou){
+      /* resposta completa (Claude ou fallback sem streaming) */
+      speak(fala);
+    } else {
+      /* streaming já foi falando em partes (fila Kokoro pode ainda estar
+         tocando): só religa quando a Dora terminar — endSpeakCycle cuida. */
+      retomarEscuta(350);
+    }
+  } catch (e){
+    console.error('[sendToBrain] erro interno:', e);
+    const msg = 'Erro interno ao processar: ' + (e && e.message ? e.message : 'desconhecido') + '. Tente de novo.';
+    showStatus(msg);
+    try { if (!streamFalou) speak(msg); } catch (_){}
+    retomarEscuta(400);
+  }
+}
+
+async function askClaude(userText){
+  const key = ($('api-key').value.trim() || localStorage.getItem('anthropic_key') || '').trim();
+  if (!key){
+    const msg = 'Preciso da sua chave da API do Claude. Cole a chave no campo lá em cima e salve.';
+    showStatus(msg); flashKeyRow(); speak(msg);
+    return null;
+  }
+  history.push({ role: 'user', content: userText });
+
+  let webCtx = null;
+if (needsWebSearch(userText)){
+    setStatus('BUSCANDO NA WEB (WIKIPEDIA + NOTICIAS)...');
+    webCtx = await searchWeb(userText);
+  }
+
+  try {
+    const sysPrompt = buildSystemPrompt() +
+      (webCtx ? '\n\nInformações frescas da web (use como fonte para responder com precisão):\n' + webCtx.slice(0, 1500) : '');
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: CONFIG.model,
+        max_tokens: 400,
+        system: sysPrompt,
+        messages: history
+      })
+    });
+    if (!res.ok){
+      const msg = 'Erro na API: ' + res.status + '. Verifique se a chave está correta.';
+      showStatus(msg); speak(msg);
+      history.pop();
+      return null;
+    }
+    const data = await res.json();
+    let text = '';
+    if (data && data.content && data.content[0] && typeof data.content[0].text === 'string'){
+      text = data.content[0].text.trim();
+    }
+    if (!text){
+      const msg = 'A API respondeu vazio. Tente novamente.';
+      showStatus(msg); speak(msg);
+      history.pop();
+      return null;
+    }
+    history.push({ role: 'assistant', content: text });
+    if (history.length > 30) history = history.slice(-30);
+    return text;
+  } catch (err){
+    const msg = 'Não consegui conectar à API. Verifique sua internet e tente de novo.';
+    showStatus(msg); speak(msg);
+    history.pop();
+    return null;
+  }
+}
+
+/* ═══════════ SYSTEM PROMPT (montado a cada chamada) ═══════════ */
+function buildSystemPrompt(){
+  const personaText = {
+    formal: 'um mordomo britânico formal, elegante e cortês, com humor seco e educação impecável',
+    relaxado: 'um assistente descontraído, amigável e leve, que trata o usuário com proximidade',
+    sarcastico: 'um assistente sarcástico e espirituoso, com respostas afiadas, mas sempre úteis'
+  }[CONFIG.persona] || 'um mordomo britânico formal';
+
+  const groups = {};
+  NOTES.forEach(n => { (groups[n.area] = groups[n.area] || []).push(n); });
+  const brainText = Object.keys(groups).map(a =>
+    'Área: ' + AREA[a].label + '\n' +
+    groups[a].map(n => '- ' + n.title + ': ' + n.body).join('\n')
+  ).join('\n\n');
+
+  /* Data e hora atuais — o modelo local não sabe que dia é hoje */
+  const agora = new Date();
+  const dataAtual = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  return [
+    'VOCÊ É ' + CONFIG.name.toUpperCase() + ' — um assistente pessoal inspirado em um mordomo dedicado, criado para o Anthony. IMPORTANTE: o SEU NOME é ' + CONFIG.name + ' (apelido "Sexta"). Você NUNCA é Jarvis, J.A.R.V.I.S., nem qualquer outro assistente fictício. Se perguntarem "quem é você", responda: "Eu sou a Sexta-Feira, seu assistente pessoal, sempre à disposição."',
+    'Persona: ' + personaText + '. Sempre trate o usuário como "' + CONFIG.address + '".',
+    'Responda em português do Brasil, como se estivesse falando em voz alta: sem emojis, sem markdown, sem listas. Nem se descreva como "Jarvis" — você se chama ' + CONFIG.name + '.',
+    'RAPIDEZ E COMPORTAMENTO (obedeça SEMPRE — o usuário OUVE sua voz, não lê texto):\n• Cumprimento (oi, olá, bom dia): 1 frase curta, até 8 palavras.\n• Agradecimento ("obrigado", "valeu"): no máximo 4 palavras ("De nada, ' + CONFIG.address + '."), sem repetir, sem agradecer de volta.\n• Pergunta simples/afirmação simples: 1 frase, até 12 palavras.\n• Pergunta comum: 1-2 frases, até 25 palavras no total.\n• Pergunta complexa: 2-3 frases só com o essencial e termine com "Quer que eu detalhe?".\n• PROIBIDO: ecoar a pergunta, dizer "ótima pergunta"/"boa pergunta", agradecer de volta, listar itens, se alongar, se despedir sem motivo ou repetir o que você mesmo disse.',
+    'DATA E HORA ATUAL (use quando perguntarem que dia é hoje, que horas são, data, etc.): ' + dataAtual + ', ' + horaAtual + '.',
+    'AÇÕES REAIS — VOCÊ EXECUTA, SEMPRE: "faça uma planilha", "crie um documento/word", "crie uma apresentação/powerpoint", "abra o excel/word", "abra um projeto", "abra o navegador", "abra no vscode", "tire uma vírgula", "corra um comando", "edite código", "baixe um arquivo", "abra um site", "envie mensagem/arquivo", "toque MÚSICA", "feche o player", "abra a janela de NOTÍCIAS". NUNCA diga "não posso" nem peça dados para criar — CRIE com conteúdo de exemplo e informe onde salvou. TERMINE a resposta com UMA tag exata no final, em linha própria, sem misturar com texto: [[FAZER:tipo|alvo|busca|substituicao]] ou tag direta [[NOME:alvo]] (ex.: [[ABRIR:chrome]]). Tipos: abrir-projeto|nome, abrir-pasta|caminho, abrir-navegador|chrome/edge/firefox/opera/brave, abrir-vscode|nome, abrir-site|url, listar-projetos, ler-arquivo|caminho, editar-arquivo|caminho|achar|novo, executar|comando, executar-arquivo|caminho, baixar-arquivo|url|destino, criar-planilha|nome, criar-documento|nome|texto, criar-apresentacao|nome, abrir-office|excel/word/powerpoint, enviar-whatsapp|numero|msg, enviar-email|dest|assunto|corpo, enviar-arquivo|caminho, tocar-musica|nome ou link, fechar-musica, abrir-noticias|termo (ou só abrir-noticias p/ mundo), fechar-noticias. Ex.: [[FAZER:criar-planilha|Planilha de Gastos]]; [[FAZER:abrir-office|excel]]; [[FAZER:abrir-projeto|sorteio de time]]; [[ABRIR:chrome]]; [[FAZER:tocar-musica|ac dc thunderstruck]]; [[FAZER:abrir-noticias|futebol]]; [[FECHAR:noticias]]. Depois da tag a ação roda sozinha.',
+    'SECOND BRAIN — contexto da vida do usuário (use sempre que relevante):\n' + (brainText || '(vazio)'),
+    'MEMÓRIA VIVA: Se o usuário revelar algo novo e duradouro, TERMINE a resposta com uma linha no formato EXATO [[SAVE:area|titulo|texto]] (area ∈ metas, trabalho, projetos, financas, aprendizado, saude, relacoes, meta). Se já existir nota com esse título, ela é atualizada; senão nasce uma nova. Inclua só quando houver algo realmente novo.',
+    (cartilhaTexto ? 'CARTILHA DE CONHECIMENTO ACUMULADO (é o aprendizado que a Sexta-Feira já viveu — use para se comportar, responder curto e ter contexto):\n' + cartilhaTexto : '')
+  ].join('\n\n');
+}
+
+/* ═══════════ MEMÓRIA VIVA — [[SAVE:...]] ═══════════ */
+const SAVE_RE = /\[\[SAVE:([a-z_]+)\|([^|]+)\|([\s\S]+?)\]\]/g;
+
+/* Se o modelo disser "sou o Jarvis", troca na hora pela identidade correta.
+   Defesa infalível — roda DEPOIS da resposta, antes de exibir/falar. */
+function forcarIdentidade(text, userText){
+  let t = text || '';
+  const perguntaQuemEh = /quem\s+(é|e)\s+voc[eê]|quem\s+é\s+voc|qual\s+(é|e)\s+(o\s+)?seu\s+nome|como\s+se\s+chama|quem\s+v[oô]ce\s+é/i.test(userText || '');
+  const dizJarvis = /jarvis|j\.a\.r\.v\.i\.s/i.test(t);
+  if (perguntaQuemEh && dizJarvis){
+    return 'Eu sou a ' + CONFIG.name + ', seu assistente pessoal — sempre à disposição, ' + CONFIG.address + '.';
+  }
+  /* mesmo em outras perguntas, remove "Jarvis" teimoso e troca pelo nome certo */
+  if (dizJarvis){
+    t = t.replace(/j\.a\.r\.v\.i\.s\.?/gi, CONFIG.name).replace(/\bJarvis\b/gi, CONFIG.name);
+  }
+  return t;
+}
+function processSaves(text){
+  let clean = text;
+  clean = clean.replace(SAVE_RE, (m, area, title, body) => {
+    saveNote(area.trim(), title.trim(), body.trim());
+    return '';
+  });
+  return clean.replace(/\s{2,}/g, ' ').trim();
+}
+function saveNote(area, title, body){
+  if (!AREA[area]) area = 'meta';
+  const existing = NOTES.find(n => n.title.toLowerCase() === title.toLowerCase());
+  if (existing){
+    existing.area = area;
+    existing.body = body;
+    persistNotes(); renderGraph(); blinkNode(existing.id);
+  } else {
+    const id = 'n' + Date.now().toString(36);
+    NOTES.push({ id, area, title, body });
+    const hub = NOTES.find(n => n.area === 'metas') || NOTES[0];
+    if (hub && hub.id !== id) REL.push([hub.id, id]);
+    persistNotes(); renderGraph(); blinkNode(id);
+  }
+}
+
+/* ═══════════ AÇÕES REAIS — [[FAZER:...]] + intenções diretas ═══════════
+   O modelo TERMINA a resposta com [[FAZER:tipo|alvo|busca|substituicao]]
+   e aqui executamos de verdade no PC: abrir projeto, editar código,
+   executar comando. Também pegamos "abra o projeto X" direto da voz.  */
+/* aceita [[FAZER:tipo|alvo|busca|sub]] E [[ABRIR:alvo]], [[TOCAR:x]], [[FECHAR:]] — tag direta */
+const FAZER_RE = /\[\[([A-Za-z-]+):([^\]|]+)(?:\|([^\]|]*))?(?:\|([^\]|]*))?(?:\|([^\]|]*))?\]\]/g;
+
+async function apiAcao(tipo, alvo, busca, substituicao){
+  try {
+    const res = await fetch(CONFIG.ollamaUrl + '/api/acao', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tipo, alvo, busca, substituicao })
+    });
+    if (!res.ok) return { ok:false, mensagem:'Falha na ação: HTTP ' + res.status };
+    return await res.json();
+  } catch (e){
+    return { ok:false, mensagem:'Não consegui executar a ação — estou rodando pelo servidor local?' };
+  }
+}
+
+/* ═══════════ RESPOSTAS RELÂMPAGO (comportamento rápido) ═══════════
+   Cumprimento, agradecimento, despedida, identidade, hora e data são
+   respondidos AQUI, em milissegundos, sem chamar o modelo — o usuário só
+   quer educação e velocidade. Retorna string (fala), '' (silêncio) ou null
+   (não é caso → vai para o modelo). */
+function respostaRapida(userText){
+  let t = String(userText || '').toLowerCase().trim();
+  t = t.replace(/^(ei\s+)?sexta(\s+feira)?[,\s!]*/i, '').trim();   // tira "sexta" da frente
+  if (!t || t.length > 42) return null;    // só frases curtas; o resto vai pro modelo
+  const addr = CONFIG.address || 'chefe';
+  const agora = new Date();
+  const hh = agora.getHours(), mm = agora.getMinutes();
+  const pad = (n) => String(n).padStart(2, '0');
+
+  if (/^(obrigad[oa]|brigad[oa]|valeu|vlw|agradecid[oa]|muito obrigado|obrigado por tudo)/i.test(t)){
+    return 'De nada, ' + addr + '! Estou aqui para isso.';
+  }
+  if (/^(oi|ol[aá]!?|opa|salve|e a[ií]|fala a[ií]|eae|hey|ei!?|bom dia|boa tarde|boa noite)\b/.test(t)){
+    return 'Olá, ' + addr + '! Tudo em ordem por aqui. Como posso ajudar?';
+  }
+  if (/^(tchau|at[eé] (logo|mais)|ate (logo|mais)|falou|adeus|bye|xau|vou nessa|vou indo)/i.test(t)){
+    return 'Até logo, ' + addr + '! Qualquer coisa é só chamar.';
+  }
+  if (/^quem\s+(é|e)\s+(voc[eê]|vc|voce)|qual\s+(é|e)\s+seu\s+nome/.test(t)){
+    return 'Eu sou a ' + CONFIG.name + ', seu assistente pessoal — sempre à disposição, ' + addr + '.';
+  }
+  if (/^(que|quais?)\s+horas(\s+(s[ãa]o|e|e[áa]?|est[aá]o?|atual|agora))?(\s+(de\s+agora|agora))?\s*$|^hora\s*(certa|agora)?\s*$|^(\s*me\s+)?(diga|diz|fala|informa|informe|d[aá])\s+(as?\s+|a\s+)?horas?\s*$|^sabe\s+que\s+horas\s*(s[ãa]o)?\s*$|^(voce|voc[eê])\s+sabe\s+que\s+horas\s*(s[ãa]o)?\s*$|^qual\s+((é|e)\s+)?(a\s+)?hora\b/.test(t)){
+    return 'Agora são ' + pad(hh) + ':' + pad(mm) + ', ' + addr + '.';
+  }
+  if (/(^que\s+dia\b.+\bhoje\b|^que\s+dia\s+da\s+semana\b|^que\s+data\b(\s*(é|e)\s*hoje)?\s*$|^que\s+dia\b\s*$|^qual\s+(é\s+)?(a\s+|o\s+)?(data|dia)\b(\s*(é|e)?\s*hoje)?\s*\.?$|^me\s+(diga|diz|fala|informa)\s*(a\s+|o\s+)?(data\s*de\s*hoje|dia\s*de\s*hoje|que\s*dia|a\s*data|o\s*dia)\b|^que\s+dia\s+estamos\b|\b(data|dia)\s+de\s+hoje\b|^hoje\s+(é|e)\s+que\s+dia\b)/i.test(t)){
+    const d = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return 'Hoje é ' + d + '.';
+  }
+  if (/^(cala\s+a\s+boca|sil[eê]ncio|pode\s+parar|pare\s+de\s+falar|chega\s+de\s+falar|basta\s+de\s+falar)\b/.test(t)){
+    return '';                              // obedece e fica quieto (silêncio proposital)
+  }
+  return null;
+}
+
+async function tryDirectAction(userText){
+  const t = (userText || '').toLowerCase().trim();
+
+/* Música: "toque/toca/ponha X" ou "toque a musica X" → player embutido NA HORA.
+     Importante: ancora no INICIO da fala e exige intencao clara de musica � sem isso,
+     frases normais como "roda um projeto" viram pedido de musica e nada responde. */
+  let mM = t.match(/^(?:toque|toca|tocar|ponha|ponha para tocar|coloca|play)\s+(?:a\s+|uma\s+|o\s+|essa\s+|aquela\s+)?(?:m[úu]sica\s+)?(.+)$/);
+  if (!mM){
+    /* "roda/rodar" só conta como música se vier junto de musica/som/playlist */
+    mM = t.match(/^(?:roda|rodar)\s+(?:a\s+|uma\s+|o\s+|essa\s+)?(?:m[úu]sica|som|playlist|m[úu]sica\s+do|m[úu]sica\s+de)(\s+.*)?$/);
+  }
+  if (mM){
+    const musica = ((mM[1] || mM[2] || '') + '').replace(/[.?!]+$/, '').trim();
+    const intencaoMusical = /(?:m[úu]sica|som|playlist|tocar|toca|toque|roda|rodar|ponha|play)/.test(t);
+    if (musica.length >= 2 && intencaoMusical && !/^(projeto|pasta)\s+/.test(musica)){
+      const msg = tocarMusica(musica);
+      showStatus('MÚSICA: ' + msg);
+      speak('Tocando ' + musica + ' para você.');
+      retomarEscuta(400);   // religa o mic so quando a Dora terminar de falar
+      return true;
+    }
+  }
+
+  /* Janela de NOTÍCIAS: "abra as notícias/notícias do mundo/janela de notícias/últimas
+     notícias/o que está acontecendo/ver notícias" → dock de notícias NA HORA */
+  let mNw = t.match(/^(?:abra|abrir|abre|abri|mostra|mostre|ver|veja|quero ver|quero)\s+(?:a\s+|as\s+|o\s+|os\s+|essa\s+|essa\s+janela\s+de\s+|janela\s+de\s+|janelas\s+de\s+)?(not[íi]cias|manchetes|headlines|o que está acontecendo no mundo|o que esta acontecendo no mundo|últimas not[íi]cias|ultimas not[íi]cias)/);
+  if (!mNw){
+    mNw = t.match(/^(?:abra|abrir|abre|abri|mostra|mostre|ver|veja|quero ver|quero)\s*(?:janela\s+de\s+)?(not[íi]cias do mundo|mundo)/) && /not[íi]cia|news|manchete|mundo/.test(t) ? t.match(/^(?:abra|abrir|abre|abri|mostra|mostre|ver|veja|quero ver|quero)\s*(?:janela\s+de\s+)?(not[íi]cias do mundo|mundo)/) : null;
+  }
+  if (mNw){
+    const buscaNews = /mundo|manchetes|headlines|acontecendo/.test(mNw[1]) ? 'noticias do mundo' : mNw[1];
+    const msg = abrirNoticias(buscaNews);
+    showStatus('NOTÍCIAS: ' + msg);
+    speak('Abrindo a janela de notícias do mundo para você.');
+    retomarEscuta(400);
+    return true;
+  }
+
+  /* Fechar: "feche a janela do youtube/player/música" → fecha o player NA HORA */
+let mF = t.match(/(?:feche|fecha|fechar|fechei?)\s+(?:a\s+|o\s+|essa\s+|essa\s+janela\s+)?(?:janela\s+|aba\s+|player\s+|dock\s+)?(?:do\s+|de\s+)?(yo?[uú]tube|player|m[úu]sica|vídeo|video|nada)/);
+  if (mF || /(?:fecha|feche|fechar)\s+o\s+(?:yo?[uú]tube|player)/.test(t)){
+const msg = fecharMusica();
+    showStatus('AÇÃO: ' + msg);
+    speak('Tudo bem, fechei o player.');
+    retomarEscuta(400);
+    return true;
+  }
+
+  /* Feche a janela de NOTÍCIAS: "feche a janela de notícias/news" → fecha o dock NA HORA */
+  let mNf = t.match(/(?:feche|fecha|fechar|fechei?)\s+(?:a\s+|as\s+|o\s+|essa\s+|essa\s+janela\s+)?(?:janela\s+|aba\s+|dock\s+)?(?:de\s+|do\s+|das\s+)?(not[íi]cias|news|manchetes)/);
+  if (mNf){
+    const msg = fecharNoticias();
+    showStatus('AÇÃO: ' + msg);
+    speak('Tudo bem, fechei a janela de notícias.');
+    retomarEscuta(400);
+    return true;
+  }
+
+  /* "abra/abrir o navegador do google / chrome / edge ..." → executa imediatamente */
+  let mN = t.match(/(?:abra|abrir|abre|abri|abra o)\s+(?:o\s+|a\s+)?(?:navegador\s+(?:do\s+|de\s+|padr[ãa]o\s+)?|browser\s+)?(google\s*chrome|chrome|google|edge|microsoft edge|firefox|opera|brave|navegador)/);
+  if (mN){
+    const navegador = (mN[1] || 'navegador').trim();
+    setStatus('ABRINDO NAVEGADOR "' + navegador + '"...');
+    const data = await apiAcao('abrir-navegador', navegador, '', '');
+const msg = data.ok ? data.mensagem : data.mensagem;
+    showStatus('AÇÃO: ' + msg);
+    speak(msg);
+    retomarEscuta(400);
+    return true;
+  }
+
+  /* "abra/abrir o projeto X no vscode / no code / no visual studio" → executa imediatamente */
+  let mV = t.match(/(?:abra|abrir|abre|abri)\s+(?:o\s+|a\s+)?(projeto|pasta|c[óo]digo|codigo)?\s*(.+?)\s*(?:no\s+|em\s+)(vs\s*code|vscode|visual studio)/);
+  if (mV){
+    const projeto = (mV[2] || '').replace(/[.?!]+$/, '').trim();
+    if (projeto.length >= 3){
+      setStatus('ABRINDO NO VSCODE "' + projeto + '"...');
+      const data = await apiAcao('abrir-vscode', projeto, '', '');
+const msg = data.ok ? data.mensagem : data.mensagem;
+      showStatus('AÇÃO: ' + msg);
+      speak(msg);
+      retomarEscuta(400);
+      return true;
+    }
+  }
+
+  /* Office: "abra o excel/word/powerpoint" → abre o aplicativo na hora */
+  let mOffice = t.match(/(?:abra|abrir|abre|abri)\s+(?:o\s+|a\s+)?(excel|word|power\s*point|powerpoint|access|outlook)\s*$/);
+  if (mOffice){
+    const aplic = mOffice[1].replace(/\s+/g, '');
+    const mapear = { excel: 'excel', word: 'winword', powerpoint: 'powerpnt', access: 'msaccess', outlook: 'outlook' };
+    const nomeApp = mapear[aplic.toLowerCase()] || 'excel';
+    setStatus('ABRINDO ' + aplic.toUpperCase() + '...');
+    const data = await apiAcao('abrir-office', nomeApp, '', '');
+    const msg = data.ok ? 'Pronto, o ' + aplic + ' está aberto.' : data.mensagem;
+    showStatus('AÇÃO: ' + msg);
+    speak(msg);
+    retomarEscuta(400);
+    return true;
+  }
+
+  /* Criação de documentos: "cria/faça uma planilha de gastos", "crie um documento",
+     "crie uma apresentação" → arquivo REAL gerado (openpyxl/docx/pptx) e aberto */
+  let mCriar = t.match(/(?:cri(?:a|e)|fa[çc]a|faz|gera|gerar|monta|monte)\s+(?:uma\s+|um\s+|a\s+|o\s+)?(planilha|planinha|tabela|spreadsheet|documento|doc|ata|texto|apresenta(?:[cç]|ca)[aã]o|apresentacao|slides|power\s*point|powerpoint)\b\s*(?:de\s+|sobre\s+|com\s+|chamad[oa]\s+|do\s+|da\s+|que\s+)?(.*)$/);
+  if (mCriar){
+    const palavra = mCriar[1].toLowerCase().replace(/\s+/g, '');
+    const resto = (mCriar[2] || '').replace(/[.?!]+$/, '').trim().toLowerCase();
+    let tipoAcao, nome;
+    if (palavra.indexOf('planilha') === 0 || palavra === 'tabela' || palavra === 'planinha' || palavra === 'spreadsheet'){
+      tipoAcao = 'criar-planilha';
+      nome = resto || 'Planilha de Gastos';
+    } else if (palavra === 'apresentacao' || palavra.indexOf('powerpoint') === 0 || palavra === 'slides'){
+      tipoAcao = 'criar-apresentacao';
+      nome = resto || 'Apresentacao';
+    } else {
+      tipoAcao = 'criar-documento';
+      nome = resto || 'Documento';
+    }
+    setStatus('CRIANDO ' + nome.toUpperCase() + '...');
+    const data = await apiAcao(tipoAcao, nome, '', '');
+    const msg = data.ok ? data.mensagem : data.mensagem;
+    showStatus('AÇÃO: ' + msg);
+    speak(msg);
+    retomarEscuta(400);
+    return true;
+  }
+
+  /* "abra/abrir/abre o projeto X" ou "abra a pasta Y" → executa imediatamente */
+  let m = t.match(/(?:abra|abrir|abre|abri)\s+(?:o\s+|a\s+)?(projeto|pasta)\s+(.+)$/);
+  if (!m) return false;
+  const nome = (m[2] || '').replace(/[.?!]+$/, '').trim();
+  if (nome.length < 3) return false;
+  const tipo = m[1] === 'pasta' ? 'abrir-pasta' : 'abrir-projeto';
+  setStatus((tipo === 'abrir-projeto' ? 'ABRINDO PROJETO' : 'ABRINDO PASTA') + ' "' + nome + '"...');
+  const data = await apiAcao(tipo, nome, '', '');
+const msg = data.ok
+    ? (tipo === 'abrir-projeto' ? 'Pronto, o projeto ' + nome + ' está aberto no Explorer.' : 'Pronto, a pasta ' + nome + ' está aberta.')
+    : data.mensagem;
+  showStatus('AÇÃO: ' + msg);
+  speak(msg);
+  retomarEscuta(400);
+  return true;
+}
+
+async function processActions(text){
+  const tags = [...text.matchAll(FAZER_RE)];
+  const clean = text.replace(FAZER_RE, '').replace(/\s{2,}/g, ' ').trim();
+  if (!tags.length) return { texto: clean, resumo: '' };
+  const msgs = [];
+  for (const m of tags){
+    /* tag = FAZER|ABRIR|TOCAR|FECHAR|EXECUTAR... (o que vier após [[) */
+    const rawTag = m[1] || '';
+    const a1 = m[2] || '', a2 = m[3] || '', a3 = m[4] || '', a4 = m[5] || '';
+    /* formato antigo: [[FAZER:tipo|alvo|busca|sub]] */
+    if (rawTag.toLowerCase() === 'fazer'){
+      const pt = a1.trim(), palvo = a2.trim(), pbus = a3.trim(), psub = a4.trim();
+if (pt.indexOf('tocar-musica') === 0 || pt === 'musica' || pt === 'tocar'){
+        msgs.push(tocarMusica(palvo, pbus));
+        continue;
+      }
+      /* notícias: mesma janela do mundo do player (forma antiga da tag) */
+      if (pt.indexOf('noticias') === 0 || pt === 'news' || pt === 'ver-noticias' || pt === 'abrir-noticias'){
+        msgs.push(abrirNoticias(pbus || palvo || 'noticias do mundo'));
+        continue;
+      }
+      if (pt.indexOf('fechar-noticias') === 0 || pt === 'fechar-news'){
+        msgs.push(fecharNoticias());
+        continue;
+      }
+      if (pt.indexOf('fechar') === 0){
+        msgs.push(fecharMusica());
+        continue;
+      }
+      const data = await apiAcao(pt, palvo, pbus, psub);
+      msgs.push(data.ok ? data.mensagem : data.mensagem);
+      continue;
+    }
+/* formato direto: [[ABRIR:chrome]], [[ABRIR-VSCODE:x]], [[TOCAR:musica]], [[FECHAR:]] ... */
+    let tipo = rawTag.toLowerCase().replace(/_/g, '-');
+    let alvo = a1.trim(), busca = a2.trim(), sub = a3.trim();
+    /* tags de CONTROLE de agente (RESPOSTA/FIM) não são ações — viram texto */
+    if (tipo === 'resposta' || tipo === 'fim' || tipo === 'concluido' || tipo === 'done' || tipo === 'final'){
+      continue;
+    }
+/* música é ação LOCAL */
+    if (tipo === 'tocar' || tipo === 'musica' || tipo === 'toque'){
+      msgs.push(tocarMusica(alvo, busca));
+      continue;
+    }
+    /* notícias é ação LOCAL (janela do mundo, como o player) */
+    if (tipo === 'noticias' || tipo === 'news' || tipo === 'abrir-noticias' || tipo === 'ver-noticias' || tipo === 'abrarnoticias'){
+      msgs.push(abrirNoticias(alvo || busca || 'noticias do mundo'));
+      continue;
+    }
+    if (tipo === 'fechar-noticias' || tipo === 'fechar-news'){
+      msgs.push(fecharNoticias());
+      continue;
+    }
+    /* fechar player é ação LOCAL */
+    if (tipo === 'fechar' || tipo === 'fechar-musica' || tipo === 'fechar-player' || tipo === 'fechar-janela'){
+      msgs.push(fecharMusica());
+      continue;
+    }
+    /* normaliza os "abrir": ABRIR-PROJETO → abrir-projeto, ABRIR-NAVEGADOR → abrir-navegador ... */
+    if (tipo === 'abrir' || tipo.indexOf('abrir') === 0){
+      if (tipo !== 'abrir-projeto' && tipo !== 'abrir-pasta' && tipo !== 'abrir-navegador' &&
+          tipo !== 'abrir-vscode' && tipo !== 'abrir-site' && tipo !== 'abrir-arquivo'){
+        /* [[ABRIR:chrome]] → abrir-navegador; [[ABRIR:youtube.com]] → abrir-site; senão abrir-projeto */
+        if (/chrome|edge|firefox|opera|brave|navegador|google/.test(alvo)) tipo = 'abrir-navegador';
+        else if (/^https?:\/\//i.test(alvo) || /\.(com|br|org|net|io|dev)\b/i.test(alvo)) tipo = 'abrir-site';
+        else if (/vs\s?code|vscode|visual studio/.test(alvo)) tipo = 'abrir-vscode';
+        else tipo = 'abrir-projeto';
+      }
+    }
+    const data = await apiAcao(tipo, alvo, busca, sub);
+    msgs.push(data.ok ? data.mensagem : data.mensagem);
+  }
+  const resumo = msgs.join(' | ');
+  showStatus('AÇÃO EXECUTADA: ' + resumo);
+  /* se o modelo já falou algo não duplica; se só saiu a tag, o resumo vira a fala */
+  return { texto: clean, resumo: resumo };
+}
+
+/* ═══════════ PLAYER DE MÚSICA — [[FAZER:tocar-musica|...]] e voz ═══════════
+   Abre o dock embutido com tocação no YouTube (embed de busca) ou, se vier
+   link do Spotify/YouTube, usa o embed oficial. Tudo dentro da mesma janela. */
+let musicFonte = 'youtube';
+
+function fecharMusica(){
+  $('music-dock').classList.remove('open');
+  $('music-frame').innerHTML = '';
+  return 'Player de música fechado.';
+}
+
+async function mountMusicFrame(query, fonte){
+  const frame = $('music-frame');
+  const link = $('music-link');
+  let src = '', ext = '';
+  if (/youtu\.?be/.test(query)){
+    /* link do YouTube: extrai o ID do vídeo */
+    const vid = query.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/);
+    if (vid){ src = 'https://www.youtube.com/embed/' + vid[1] + '?autoplay=1'; ext = 'https://www.youtube.com/watch?v=' + vid[1]; }
+  }
+  if (!src && /open\.spotify\.com|spotify:/.test(query)){
+    /* link do Spotify: extrai o ID do track/album/playlist */
+    const sid = query.match(/(?:track|album|playlist)\/([\w]+)|spotify:(?:track|album|playlist):([\w]+)/);
+    const tipoSp = query.indexOf('playlist') >= 0 ? 'playlist' : (query.indexOf('album') >= 0 ? 'album' : 'track');
+    const idSp = sid ? (sid[1] || sid[2]) : '';
+    if (idSp){ src = 'https://open.spotify.com/embed/' + tipoSp + '/' + idSp; ext = 'https://open.spotify.com/' + tipoSp + '/' + idSp; }
+  }
+  if (!src){
+    /* busca de verdade: o servidor local consulta o YouTube e devolve o 1º videoId
+       (o embed de busca do YouTube virou instável — toca direto o vídeo real) */
+    try {
+      const res = await fetch(CONFIG.ollamaUrl + '/api/youtube?q=' + encodeURIComponent(query));
+      if (res.ok){
+        const d = await res.json();
+        if (d && d.ok && d.videoId){
+          src = 'https://www.youtube.com/embed/' + d.videoId + '?autoplay=1';
+          ext = d.url || ('https://www.youtube.com/watch?v=' + d.videoId);
+        }
+      }
+    } catch(e){ /* servidor local fora — cai no fallback */ }
+    if (!src){
+      /* fallback: embed de busca (pode falhar as vezes, mas é a última rede) */
+      const q = encodeURIComponent(query);
+      src = 'https://www.youtube.com/embed?listType=search&list=' + q + '&autoplay=1';
+      ext = 'https://www.youtube.com/results?search_query=' + q;
+    }
+  }
+  frame.innerHTML = '<iframe src="' + src + '" allow="autoplay; encrypted-media" allowfullscreen loading="eager"></iframe>';
+  frame.dataset.fonte = fonte || 'youtube';
+  link.href = ext;
+  $('music-note').textContent = 'TOCANDO: ' + query.toUpperCase();
+}
+
+function tocarMusica(query, fonte){
+  query = (query || '').trim();
+  if (query.length < 2){ query = 'lofi hip hop radio'; }
+  musicFonte = (fonte === 'spotify' || /spotify|open\.spotify/i.test(query)) ? 'spotify' : 'youtube';
+  document.querySelectorAll('.music-tab').forEach(b => b.classList.toggle('active', b.dataset.src === musicFonte));
+  $('music-query').value = query;
+  $('music-dock').classList.add('open');
+  $('music-note').textContent = 'BUSCANDO "' + query.toUpperCase() + '" NO YOUTUBE...';
+  mountMusicFrame(query, musicFonte);   /* async: troca o note pelo vídeo quando achar */
+  return 'Player aberto buscando "' + query + '".';
+}
+
+function initMusicDock(){
+  $('music-go').addEventListener('click', () => tocarMusica($('music-query').value, musicFonte));
+  $('music-query').addEventListener('keydown', e => { if (e.key === 'Enter') tocarMusica($('music-query').value, musicFonte); });
+  $('music-close').addEventListener('click', () => { $('music-dock').classList.remove('open'); $('music-frame').innerHTML = ''; });
+
+  /* ── JANELA FLUTUANTE: arrasta pela barra de título (mouse e toque) ── */
+  const dock = $('music-dock'), head = $('music-head');
+  let drag = null;
+  head.addEventListener('pointerdown', e => {
+    /* não arrasta ao clicar em botões/abas (só na barra livre/título/grip) */
+    if (e.target.closest('button, .music-tab')) return;
+    const r = dock.getBoundingClientRect();
+    drag = { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height };
+    head.setPointerCapture && head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove', e => {
+    if (!drag) return;
+    let nx = e.clientX - drag.x, ny = e.clientY - drag.y;
+    nx = Math.max(-drag.w + 120, Math.min(nx, innerWidth - 60));
+    ny = Math.max(4, Math.min(ny, innerHeight - drag.h + 26));
+    dock.style.left = nx + 'px';
+    dock.style.top = ny + 'px';
+    dock.classList.add('dragged');
+  });
+  const endDrag = () => { drag = null; };
+  head.addEventListener('pointerup', endDrag);
+  head.addEventListener('pointercancel', endDrag);
+
+  document.querySelectorAll('.music-tab').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.music-tab').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      musicFonte = b.dataset.src;
+      const q = $('music-query').value.trim() || 'lofi hip hop radio';
+      if (musicFonte === 'spotify'){
+        /* Spotify: sem chave de API, abre a pesquisa no site (não embute busca) */
+        $('music-frame').innerHTML = '<div style="paddig:60px 16px;text-align:center;color:var(--dim);font-size:.78rem;letter-spacing:.08em;background:rgba(2,4,10,.6);height:100%;display:flex;align-items:center;justify-content:center">Abra o Spotify na aba externa para ouvir "' + q + '"</div>';
+        $('music-link').href = 'https://open.spotify.com/search/' + encodeURIComponent(q);
+        $('music-link').textContent = 'abrir no spotify ↗';
+} else {
+        $('music-link').textContent = 'abrir externo ↗';
+        mountMusicFrame(q, 'youtube');
+      }
+    });
+  });
+}
+
+/* ═══════════ JANELA DE NOTÍCIAS DO MUNDO — [[FAZER:abrir-noticias|...]] e voz ═══════════
+   Mesmo padrão do player de música: dock flutuante e arrastável, agora com a
+   lista de notícias do Google News (headlines do mundo ou busca específica). */
+function fecharNoticias(){
+  const dock = $('news-dock');
+  if (dock) dock.classList.remove('open');
+  return 'Janela de notícias fechada.';
+}
+
+function abrirNoticias(query){
+  const dock = $('news-dock');
+  if (!dock) return 'Janela de notícias indisponível.';
+  dock.classList.add('open');
+  $('news-note').textContent = 'NOTÍCIAS DO MUNDO';
+  montarNoticias(query || 'noticias do mundo');
+  return query ? ('Janela aberta com notícias sobre "' + query + '".') : 'Janela de notícias aberta.';
+}
+
+/* Busca as notícias no servidor local (/api/noticias → Google News RSS) e
+   monta a lista clicável. Mesma lógica robusta do player: cai sem quebrar. */
+async function montarNoticias(query){
+  const lista = $('news-list');
+  const note = $('news-note');
+  if (!lista) return;
+  lista.innerHTML = '<div class="news-loading"><i></i><i></i><i></i></div>';
+  const q = (query || '').trim() || 'noticias do mundo';
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(CONFIG.ollamaUrl + '/api/noticias?q=' + encodeURIComponent(q), { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (!d || !d.ok || !(d.items || []).length){
+      throw new Error((d && d.mensagem) || 'sem notícias');
+    }
+    const itens = d.items.slice(0, 8);
+    if (note) note.textContent = itens.length + ' NOTÍCIAS · ' + q.toUpperCase().slice(0, 40记住了);
+    /* ═══ NEWS CASTER ═══
+       hero (destaca 1a com imagem) + chips de atalho + ticker de manchetes.
+       Reaproveita <img object-fit:cover> sem estirar nem distorcer. */
+    const chipsHTML = [
+      { rot:'🌍', query:'noticias do mundo' }, { rot:'🇧🇷', query:'noticias do brasil' },
+      { rot:'📱', query:'tecnologia' }, { rot:'⚽', query:'futebol' },
+      { rot:'🎬', query:'cinema' }, { rot:'🥇', query:'esportes' }
+    ].map(c =>
+      '<button type="button" class="news-chip" data-q="' + esc(c.query) + '">' + c.rot + ' <span>' + esc(c.query.toUpperCase().slice(0, 22)) + '</span></button>'
+    ).join('');
+    const comImg = itens.filter(n => n.image);
+    const hero = comImg[0]
+      ? '<a class="news-hero" href="' + esc(comImg[0].url || '#') + '" target="_blank" rel="noopener">' +
+          '<span class="nh-img-box"><img src="' + esc(comImg[0].image) + '" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.closest(\'.news-hero\').style.display=\'none\'">' +
+          '<span class="nh-grad"></span></span>' +
+          '<span class="nh-corpo">' +
+            '<span class="nh-src">' + esc(comImg[0].source || 'MUNDO').toUpperCase() + '</span>' +
+            '<span class="nh-titulo">' + esc(comImg[0].title || '') + '</span>' +
+          '</span>' +
+        '</a>'
+      : '';
+    const listaResto = itens.slice(comImg[0] ? 1 : 0).map(n =>
+      '<a class="news-item" href="' + esc(n.url || '#') + '" target="_blank" rel="noopener">' +
+        (n.image
+          ? '<span class="n-thumb"><img src="' + esc(n.image) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest(\'.n-thumb\').style.display=\'none\'"></span>'
+          : '') +
+        '<span class="n-corpo">' +
+          '<span class="n-title">' + esc(n.title || '') + '</span>' +
+          (n.data ? '<span class="n-data">' + esc(n.data) + '</span>' : '') +
+        '</span>' +
+      '</a>'
+    ).join('');
+    const tickerHTML = '<div class="news-ticker">' +
+        '<span class="tk-label">AGORA</span>' +
+        '<span class="tk-track"><span class="tk-inner">' +
+          (itens.slice(0, 5).map(n =>
+            '<span class="tk-item"><b>' + esc((n.source || '').toUpperCase().slice(0, 12)) + '</b> · ' + esc(n.title || '') + '</span>'
+          ).join('') || '<span class="tk-item"><b>SEXTA-FEIRA</b> · SEM MANCHETES AGORA</span>') +
+        '</span></span>' +
+      '</div>';
+    lista.innerHTML = '<div class="news-chips">' + chipsHTML + '</div>' + hero + '<div class="news-cast">' + (listaResto || '<div class="news-empty">SEM MAIS MANCHETES AGORA.</div>') + '</div>' + tickerHTML;
+  } catch (e){
+    if (note) note.textContent = 'FALHA AO BUSCAR NOTÍCIAS';
+    lista.innerHTML = '<div class="news-empty">Não consegui buscar as notícias agora.<br>Verifique se o servidor local está no ar e tente de novo.</div>';
+  }
+}
+
+function initNewsDock(){
+  const go = $('news-go'), q = $('news-query'), closeBtn = $('news-close');
+  if (go) go.addEventListener('click', () => montarNoticias(q.value));
+  if (q) q.addEventListener('keydown', e => { if (e.key === 'Enter') montarNoticias(q.value); });
+  if (closeBtn) closeBtn.addEventListener('click', () => { $('news-dock').classList.remove('open'); });
+
+  /* ── JANELA FLUTUANTE: arrasta pela barra de título (mesmo padrão do player) ── */
+  const dock = $('news-dock'), head = $('news-head');
+  if (!dock || !head) return;
+  let drag = null;
+  head.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    const r = dock.getBoundingClientRect();
+    drag = { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height };
+    head.setPointerCapture && head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove', e => {
+    if (!drag) return;
+    let nx = e.clientX - drag.x, ny = e.clientY - drag.y;
+    nx = Math.max(-drag.w + 120, Math.min(nx, innerWidth - 60));
+    ny = Math.max(4, Math.min(ny, innerHeight - drag.h + 26));
+    dock.style.left = nx + 'px';
+    dock.style.top = ny + 'px';
+    dock.classList.add('dragged');
+  });
+  const endDrag = () => { drag = null; };
+  head.addEventListener('pointerup', endDrag);
+  head.addEventListener('pointercancel', endDrag);
+}
+
+/* ═══════════ Persistência ═══════════ */
+function loadState(){
+  try {
+    const rawNotes = localStorage.getItem('jarvis_notes');
+    if (rawNotes){
+      const parsed = JSON.parse(rawNotes);
+      if (Array.isArray(parsed) && parsed.length) NOTES = parsed;
+    }
+    const rawRel = localStorage.getItem('jarvis_rel');
+    if (rawRel){
+      const parsed = JSON.parse(rawRel);
+      if (Array.isArray(parsed) && parsed.length) REL = parsed;
+    }
+  } catch(e){ /* estado corrompido — usa defaults */ }
+}
+function persistNotes(){
+  localStorage.setItem('jarvis_notes', JSON.stringify(NOTES));
+  localStorage.setItem('jarvis_rel', JSON.stringify(REL));
+}
+
+/* ═══════════ SECOND BRAIN — GRAFO ═══════════ */
+const GW = 1000, GH = 540;
+function renderGraph(){
+  const container = $('graph-container');
+  const uid = 'j' + Math.floor(Math.random() * 1e9);
+  const cx = GW / 2, cy = GH / 2, rx = 380, ry = 200;
+
+  const degree = {};
+  NOTES.forEach(n => degree[n.id] = 0);
+  REL.forEach(pair => { degree[pair[0]]++; degree[pair[1]]++; });
+
+  nodeMap = {}; edgePaths = [];
+  const nodeParts = [], rayParts = [];
+
+  NOTES.forEach((note, i) => {
+    const ang = (i / Math.max(1, NOTES.length)) * Math.PI * 2 - Math.PI / 2;
+    const x = cx + rx * Math.cos(ang);
+    const y = cy + ry * Math.sin(ang);
+    const r = 14 + Math.min(11, degree[note.id] * 2.2);
+    nodeMap[note.id] = { x, y, r };
+    const color = (AREA[note.area] || AREA.meta).color;
+
+    nodeParts.push(
+      '<g class="node" data-id="' + note.id + '" style="cursor:pointer">' +
+        '<circle class="ring" cx="' + x + '" cy="' + y + '" r="' + (r + 6) + '" fill="none" stroke="' + color + '" stroke-width="1" opacity=".5">' +
+          '<animate attributeName="r" values="' + (r + 6) + ';' + (r + 15) + ';' + (r + 6) + '" dur="3.6s" repeatCount="indefinite"/>' +
+          '<animate attributeName="opacity" values=".5;0;.5" dur="3.6s" repeatCount="indefinite"/>' +
+        '</circle>' +
+        '<circle class="nbody" cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + color + '" fill-opacity=".16" stroke="' + color + '" stroke-width="1.6"/>' +
+        '<text x="' + x + '" y="' + (y + r + 17) + '" text-anchor="middle" class="nlabel">' + esc(note.title) + '</text>' +
+      '</g>'
+    );
+    rayParts.push(
+      '<line x1="' + cx + '" y1="' + cy + '" x2="' + x + '" y2="' + y + '" stroke="' + color + '" stroke-width=".7" opacity=".4"/>'
+    );
+  });
+
+  const edgeParts = [];
+  REL.forEach((pair, k) => {
+    const A = nodeMap[pair[0]], B = nodeMap[pair[1]];
+    if (!A || !B) return;
+    const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+    const C = { x: mx + (cx - mx) * 0.35, y: my + (cy - my) * 0.35 };
+    edgePaths.push({ a: A, c: C, b: B });
+    const d = 'M' + A.x + ',' + A.y + ' Q' + C.x + ',' + C.y + ' ' + B.x + ',' + B.y;
+    edgeParts.push(
+      '<path class="edge" d="' + d + '" fill="none" stroke="url(#' + uid + 'eg)" stroke-width="1.3" stroke-linecap="round"/>'
+    );
+  });
+
+  const defs =
+    '<defs>' +
+      '<linearGradient id="' + uid + 'eg" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/>' +
+      '</linearGradient>' +
+      '<radialGradient id="' + uid + 'core">' +
+        '<stop offset="0" stop-color="#c4b5fd"/><stop offset=".55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#4c1d95"/>' +
+      '</radialGradient>' +
+      '<filter id="' + uid + 'glow" x="-60%" y="-60%" width="220%" height="220%">' +
+        '<feGaussianBlur stdDeviation="7" result="b"/>' +
+        '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>' +
+      '</filter>' +
+    '</defs>';
+
+  const core =
+    '<g filter="url(#' + uid + 'glow)">' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="52" fill="url(#' + uid + 'core)" fill-opacity=".9">' +
+        '<animate attributeName="r" values="50;59;50" dur="3s" repeatCount="indefinite"/>' +
+      '</circle>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="46" fill="none" stroke="#a78bfa" stroke-width="1.4">' +
+        '<animate attributeName="r" values="46;64;46" dur="3s" repeatCount="indefinite"/>' +
+        '<animate attributeName="opacity" values=".7;0;.7" dur="3s" repeatCount="indefinite"/>' +
+      '</circle>' +
+      '<text x="' + cx + '" y="' + (cy + 9) + '" text-anchor="middle" class="core-emoji">🧠</text>' +
+    '</g>';
+
+  /* 12 pulsos de sinapse brancos */
+  const pulses = '<g>' + Array.from({ length: 12 }, () =>
+    '<circle class="pulse" r="3" fill="#ffffff"/>'
+  ).join('') + '</g>';
+
+  /* COMPATIBILIDADE CRÍTICA: string inteira injetada numa DIV (nunca direto no <svg>) */
+  const svg =
+    '<svg viewBox="0 0 ' + GW + ' ' + GH + '" class="graph-svg">' +
+      defs +
+      '<g filter="url(#' + uid + 'glow)">' + rayParts.join('') + '</g>' +
+      edgeParts.join('') +
+      core +
+      pulses +
+      nodeParts.join('') +
+    '</svg>';
+  container.innerHTML = svg;
+
+  /* interação: clicar no nó abre o editor */
+  container.querySelectorAll('.node').forEach(el => {
+    el.addEventListener('click', () => openEditor(el.getAttribute('data-id')));
+  });
+
+  pulseRefs = Array.from(container.querySelectorAll('.pulse'));
+  pulseStates = pulseRefs.map(() => {
+    const ei = Math.floor(Math.random() * edgePaths.length);
+    return { edge: edgePaths[ei] || null, t: Math.random() };
+  });
+  updateCounter();
+  renderLegend();
+}
+
+/* pulsos via requestAnimationFrame: posição na quadrática (1-t)²A + 2(1-t)tC + t²B */
+function animatePulses(){
+  pulseStates.forEach((ps, i) => {
+    const el = pulseRefs[i];
+    if (!el || !ps.edge){ return; }
+    ps.t += 0.0026;
+    if (ps.t >= 1){
+      ps.t = 0;
+      const ei = Math.floor(Math.random() * edgePaths.length);
+      ps.edge = edgePaths[ei] || ps.edge;
+    }
+    const t = ps.t, u = 1 - t;
+    const { a, c, b } = ps.edge;
+    const x = u * u * a.x + 2 * u * t * c.x + t * t * b.x;
+    const y = u * u * a.y + 2 * u * t * c.y + t * t * b.y;
+    el.setAttribute('cx', x);
+    el.setAttribute('cy', y);
+    el.setAttribute('opacity', (Math.sin(ps.t * Math.PI) * 0.9 + 0.1).toFixed(3));
+  });
+  requestAnimationFrame(animatePulses);
+}
+
+/* nó "pisca" quando uma nota é criada/atualizada */
+function blinkNode(id){
+  const body = document.querySelector('.node[data-id="' + id + '"] .nbody');
+  if (!body) return;
+  body.classList.add('blink');
+  setTimeout(() => body.classList.remove('blink'), 1700);
+}
+
+/* contador e legenda */
+function updateCounter(){
+  const areasCount = new Set(NOTES.map(n => n.area)).size;
+  $('brain-count').textContent = NOTES.length + ' notas · ' + areasCount + ' áreas';
+}
+function renderLegend(){
+  const present = [...new Set(NOTES.map(n => n.area))];
+  $('legend').innerHTML =
+    present.map(a => '<span class="lg-item"><i style="background:' + AREA[a].color + '"></i>' + esc(AREA[a].label) + '</span>').join('') +
+    '<span class="lg-injected">✓ contexto injetado em todos os comandos do ' + esc(CONFIG.name) + '</span>';
+}
+
+/* ═══════════ EDITOR DE NOTA ═══════════ */
+function openEditor(id){
+  const note = NOTES.find(n => n.id === id);
+  if (!note) return;
+  editingId = id;
+  $('modal-title').textContent = 'EDITAR NOTA';
+  $('ed-title').value = note.title;
+  $('ed-area').value = note.area;
+  $('ed-body').value = note.body;
+  $('modal').classList.add('open');
+}
+function openNew(){
+  editingId = null;
+  $('modal-title').textContent = 'NOVA NOTA';
+  $('ed-title').value = '';
+  $('ed-area').value = 'metas';
+  $('ed-body').value = '';
+  $('modal').classList.add('open');
+}
+function closeModal(){ $('modal').classList.remove('open'); }
+
+$('btn-add').addEventListener('click', openNew);
+$('btn-cancel').addEventListener('click', closeModal);
+$('btn-del').addEventListener('click', () => {
+  if (!editingId) return;
+  NOTES = NOTES.filter(n => n.id !== editingId);
+  REL = REL.filter(pair => pair[0] !== editingId && pair[1] !== editingId);
+  persistNotes();
+  renderGraph();
+  closeModal();
+});
+$('btn-save-note').addEventListener('click', () => {
+  const title = $('ed-title').value.trim();
+  const area = $('ed-area').value;
+  const body = $('ed-body').value.trim();
+  if (!title){ $('ed-title').focus(); return; }
+  if (editingId){
+    const note = NOTES.find(n => n.id === editingId);
+    if (note){ note.title = title; note.area = area; note.body = body; }
+    persistNotes(); renderGraph(); blinkNode(editingId);
+  } else {
+    const id = 'n' + Date.now().toString(36);
+    NOTES.push({ id, area, title, body });
+    const hub = NOTES.find(n => n.area === 'metas') || NOTES[0];
+    if (hub && hub.id !== id) REL.push([hub.id, id]);
+    persistNotes(); renderGraph(); blinkNode(id);
+  }
+  closeModal();
+});
+$('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
+$('btn-reload').addEventListener('click', () => { loadState(); renderGraph(); showStatus('SECOND BRAIN RECARREGADO'); });
+</script>
+</body>
+</html>
+
+
+
+
+
+
