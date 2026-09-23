@@ -37,6 +37,8 @@
   '.news-card{transition:all .25s ease;overflow:hidden}.news-card:hover{border-color:var(--accent);transform:translateX(4px);box-shadow:0 0 20px rgba(0,229,255,.15)}'+
   '.news-img{width:100%;height:140px;object-fit:cover;display:block;border-bottom:1px solid var(--border);background:rgba(0,229,255,.05)}'+
   '.track-item{transition:all .2s ease;cursor:pointer}.track-item:hover{background:var(--accent-soft)}.track-item.playing{color:var(--accent);border-left:2px solid var(--accent)}'+
+  '.chip{transition:all .2s ease;cursor:pointer;background:var(--card);border:1px solid var(--border);color:var(--text);font-size:11px;padding:5px 12px;border-radius:999px;font-family:"Chakra Petch",sans-serif}.chip:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}'+
+  '#modelSelect option{background:#0a1a26;color:var(--text)}'+
   '.dot-typing span{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin:0 2px;animation:typing 1.2s infinite}.dot-typing span:nth-child(2){animation-delay:.2s}.dot-typing span:nth-child(3){animation-delay:.4s}'+
   '.mic-btn{transition:all .3s ease}.mic-btn.recording{background:var(--accent);color:#040b12;box-shadow:0 0 24px var(--accent);animation:pulse 1s infinite}'+
   'input,textarea,select{outline:none;max-width:100%}input:focus,textarea:focus,select:focus{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--accent-soft)}'+
@@ -104,8 +106,7 @@
             </svg>
             <div class="orb-core core-pulse" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70px;height:70px;border-radius:50%;background:radial-gradient(circle,#fff 0%,var(--accent) 40%,transparent 75%);box-shadow:0 0 40px var(--accent),0 0 80px rgba(0,229,255,.5);"></div>
           </div>
-          <h2 class="font-hud text-lg font-bold mt-6 glow-text tracking-[3px]" style="color:var(--accent);">SEXTA-FEIRA</h2>
-          <p class="text-xs mt-2 text-center" style="color:var(--muted);">Assistente Pessoal Inteligente<br>Modelo Neural · v6.0</p>
+          <h2 class="font-hud text-lg font-bold mt-6 glow-text tracking-[3px]" style="color:var(--accent);">SEXTA-FEIRA</h2><p class="text-xs mt-2 text-center" style="color:var(--muted);">Assistente Pessoal Inteligente<br>Modelo Neural · v6.1</p>
           <div class="mt-5 w-full space-y-2">
             <div>
               <div class="flex justify-between text-xs mb-1" style="color:var(--muted);"><span>NUCLEO IA</span><span id="coreStat">98%</span></div>
@@ -278,7 +279,20 @@
             <div class="glass rounded-2xl p-6 flex flex-col" style="min-height:460px;">
               <div class="flex items-center justify-between gap-2 flex-wrap mb-3">
                 <h3 class="font-hud text-lg font-semibold" style="color:var(--accent);">CONVERSAR COM A SEXTA-FEIRA</h3>
-                <span class="text-xs px-2 py-1 rounded font-hud" id="chatModel" style="background:var(--accent2-soft);color:var(--text);border:1px solid var(--accent2);">conectando...</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <select id="modelSelect" title="Modelo do Ollama local" style="background:rgba(0,0,0,.35);border:1px solid var(--accent2);color:var(--text);border-radius:8px;padding:4px 8px;font-size:12px;font-family:'Chakra Petch',sans-serif;outline:none;max-width:170px;cursor:pointer;">
+                    <option value="">carregando modelos...</option>
+                  </select>
+                  <span class="text-xs px-2 py-1 rounded font-hud" id="chatModel" style="background:var(--accent2-soft);color:var(--text);border:1px solid var(--accent2);">conectando...</span>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2 mb-3" id="chatChips">
+                <button class="chip" data-pergunta="gere um codigo em Python">Código Python</button>
+                <button class="chip" data-pergunta="gere um codigo em JavaScript">Código JS</button>
+                <button class="chip" data-pergunta="quais as noticias do mundo?">Abra notícias</button>
+                <button class="chip" data-pergunta="toque lofi hip hop radio">Toque música</button>
+                <button class="chip" data-pergunta="que horas sao?">Que horas são?</button>
+                <button class="chip" data-pergunta="conte uma piada">Piada</button>
               </div>
               <div id="chatArea" style="flex:1;overflow-y:auto;max-height:300px;min-height:180px;" class="space-y-3 pr-1">
                 <div class="flex gap-2">
@@ -596,9 +610,62 @@
   });
 
   /* ═══════════ CHAT (Ollama real via /api/chat no exe; demo na web) ═══════════ */
-  var chatArea = $('chatArea'), chatInput = $('chatInput'), sendBtn = $('sendBtn');
+  var chatArea = $('chatArea'), chatInput = $('chatInput'), sendBtn = $('sendBtn'), modelSelect = $('modelSelect');
   var modeloAtivo = localStorage.getItem('jarvis_modelo') || CONFIG.ollamaModel || 'qwen2.5:1.5b';
   var historico = [];
+  var nomeUsuario = localStorage.getItem('sexta_nome') || '';
+
+  /* Carrega os modelos instalados no Ollama (exe) e preenche o dropdown.
+     Na web, mostra uma lista sugerida (sem backend real). */
+  function carregarModelos(){
+    if (!modelSelect) return;
+    var salvar = function(lista){
+      var atual = modeloAtivo;
+      modelSelect.innerHTML = '';
+      if (!lista || lista.length === 0){
+        modelSelect.add(new Option(atual, atual));
+        return;
+      }
+      lista.forEach(function(m){
+        var nome = (typeof m === 'string') ? m : (m.nome || m.name || m.model);
+        if (!nome) return;
+        modelSelect.add(new Option(nome, nome));
+      });
+      if (!lista.some(function(m){ var n = (typeof m === 'string') ? m : (m.nome || m.name || m.model); return n === atual; })){
+        modelSelect.add(new Option(atual, atual));
+      }
+      modelSelect.value = atual;
+      var cm = $('chatModel'); if (cm) cm.textContent = 'OLLAMA · ' + atual.replace(/^.*?[:/]/,'');
+    };
+    if (AMBIENTE === 'exe'){
+      fetch(apiUrl('/api/models'), { signal: AbortSignal.timeout(5000) })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){ salvar(j && j.models ? j.models : null); })
+        .catch(function(){ salvar(null); });
+    } else {
+      salvar(['sexta-1.5b','qwen2.5:1.5b','llama3.1:8b','qwen2.5-coder:3b']);
+    }
+  }
+  if (modelSelect){
+    modelSelect.addEventListener('change', function(){
+      if (!modelSelect.value) return;
+      modeloAtivo = modelSelect.value;
+      try { localStorage.setItem('jarvis_modelo', modeloAtivo); } catch (e){}
+      var cm = $('chatModel'); if (cm) cm.textContent = 'OLLAMA · ' + modeloAtivo.replace(/^.*?[:/]/,'');
+      historico = [];
+    });
+  }
+
+  /* Chips de atalho: clicar pergunta direto no chat */
+  var chips = document.querySelectorAll('#chatChips .chip');
+  chips.forEach(function(c){
+    c.addEventListener('click', function(){
+      var p = c.getAttribute('data-pergunta');
+      if (!p) return;
+      if (chatInput) chatInput.value = p;
+      sendChat();
+    });
+  });
 
   function addMsg(texto, who){
     if (!chatArea) return;
@@ -657,18 +724,44 @@
     return null;
   }
 
+  /* Memoriza o nome do usuário quando ele se apresenta (usado nas respostas) */
+  function capturarNome(texto){
+    var m = texto.match(/(?:meu nome e|meu nome é|me chamo|me chamam|sou o|sou a|pode me chamar de)\s+([a-zA-ZÀ-ú]+)/i);
+    if (m && m[1]){
+      var n = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+      if (n.toLowerCase() !== 'sexta' && n.toLowerCase() !== 'sexta-feira'){
+        nomeUsuario = n;
+        try { localStorage.setItem('sexta_nome', nomeUsuario); } catch (e){}
+        var sub = $('subGreeting');
+        if (sub) sub.textContent = 'Que bom te ver, ' + nomeUsuario + '! Fale comigo ou escolha uma aba abaixo.';
+      }
+    }
+  }
+
   function responderLocal(texto){
+    capturarNome(texto);
     var r = cmdLocal(texto);
     if (r) return r;
+    if (texto.match(/(?:meu nome e|meu nome é|me chamo|me chamam|sou o|sou a|pode me chamar de)/i) && nomeUsuario){
+      return 'Que nome lindo, ' + nomeUsuario + '! Já me lembro de você. Em que posso ajudar hoje?';
+    }
+    if (texto.match(/(?:qual e o meu nome|qual é o meu nome|quem sou eu|sabe meu nome|lembra de mim)/i)){
+      return nomeUsuario ? ('Claro que sei! Você é o ' + nomeUsuario + ' — meu grande amigo.') : 'Ainda não me contou seu nome. Pode falar: "meu nome é..." que eu guardo com carinho.';
+    }
     return 'Entendi. Posso ajudar com: horários, música (YouTube), agenda, notícias e status do sistema. Também converso com o modelo local (Ollama) quando conectado. Tente perguntar algo!';
   }
 
   function enviarParaApi(texto){
+    capturarNome(texto);
     var body = {
       messages: historico.slice().concat([{ role:'user', content: texto }]),
       model: modeloAtivo,
-      stream: false
+      stream: false,
+      options: { temperature: 0.7 }
     };
+    if (nomeUsuario){
+      body.system = 'Chame o usuário de "' + nomeUsuario + '". Responda em português do Brasil.';
+    }
     return fetch(apiUrl('/api/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -931,7 +1024,11 @@
     document.title = CONFIG.name.toUpperCase() + ' — Assistente Pessoal Inteligente';
     detectarAmbiente();
     initKokoro();
+    setTimeout(carregarModelos, 1500);
     setTimeout(function(){ carregarNoticias('noticias do mundo'); }, 2500);
+    /* saudação com o nome do usuário (memória) */
+    var sub = $('subGreeting');
+    if (sub && nomeUsuario) sub.textContent = 'Que bom te ver, ' + nomeUsuario + '! Fale comigo ou escolha uma aba abaixo.';
   });
 })();
 </script>
