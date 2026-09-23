@@ -730,13 +730,32 @@ main{
 #news-dock .music-close:hover{ color:#f87171; border-color:#f87171; }
 
 @media (max-width:640px){
+  header{ gap:8px; padding:10px 12px; }
   .key-row input{ width:100%; }
   .brain-count{ width:100%; margin-left:0; }
-  .orb{ width:112px; height:112px; }
+  .orb{ width:104px; height:104px; }
+  .orb-wrap::before{ width:170px; height:170px; }
+  .transcript{ margin-top:16px; }
+  .line{ max-width:94%; padding:8px 12px; }
+  #status{ padding:7px 14px; letter-spacing:.2em; }
+  main{ padding:18px 12px 8px; }
   #music-dock{ right:10px; bottom:10px; width:calc(100vw - 20px); }
   .music-frame{ height:210px; }
   #news-dock{ right:10px; bottom:10px; width:calc(100vw - 20px); }
   .news-list{ max-height:240px; }
+  #brain{ padding:0 12px; }
+}
+@media (max-width:420px){
+  header{ flex-wrap:wrap; }
+  .brand{ font-size:1rem; letter-spacing:.12em; }
+  .provider-select{ max-width:100%; font-size:.64rem; padding:7px 8px; }
+  .key-row{ width:100%; margin-left:0; }
+  #btn-dinamico{ font-size:10px; padding:4px 8px; }
+  .line::before{ width:28px; height:28px; font-size:.7rem; }
+  .ctrl-btn{ width:46px; }
+  .input-row input{ padding:12px 14px; font-size:.9rem; }
+  #btn-activate{ padding:14px 30px; font-size:.95rem; }
+  .music-tabs{ display:none; }
 }
 </style>
 </head>
@@ -747,7 +766,7 @@ main{
   <div class="brand-big" id="boot-name">SEXTA-FEIRA</div>
   <hr class="boot-hr">
   <div class="boot-sync">SINCRONIZANDO DADOS...</div>
-  <div class="boot-ver">v5.0 · REBUILD</div>
+  <div class="boot-ver">v6.0 · REBUILD</div>
 </div>
 
 <!-- ═══════════ TELA 2 — ATIVAÇÃO ═══════════ -->
@@ -2529,7 +2548,7 @@ async function montarNoticias(query){
       throw new Error((d && d.mensagem) || 'sem notícias');
     }
     const itens = d.items.slice(0, 8);
-    if (note) note.textContent = itens.length + ' NOTÍCIAS · ' + q.toUpperCase().slice(0, 40记住了);
+    if (note) note.textContent = itens.length + ' NOTÍCIAS · ' + q.toUpperCase().slice(0, 40);
     /* ═══ NEWS CASTER ═══
        hero (destaca 1a com imagem) + chips de atalho + ticker de manchetes.
        Reaproveita <img object-fit:cover> sem estirar nem distorcer. */
